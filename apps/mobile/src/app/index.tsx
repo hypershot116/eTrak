@@ -1,99 +1,51 @@
-import * as Device from "expo-device";
-import { Platform, StyleSheet, Text } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from "@/components/animated-icon";
-import { HintRow } from "@/components/hint-row";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { WebBadge } from "@/components/web-badge";
-import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
+import { accents, type AccentKey } from '@/theme/palettes';
+import { useThemeStore, type ThemeMode } from '@/theme/theme-store';
 
-function getDevMenuHint() {
-  if (Platform.OS === "web") {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === "android" ? "cmd+m (or ctrl+m)" : "cmd+d";
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+const modes: ThemeMode[] = ['light', 'dark', 'system'];
 
 export default function HomeScreen() {
+  const { mode, accent, setMode, setAccent } = useThemeStore();
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-          <Text className="text-xl font-bold text-blue-500">Hello eTrak</Text>
-        </ThemedView>
+    <SafeAreaView className="flex-1 items-center justify-center gap-6 px-6">
+      <Text className="text-4xl font-bold text-accent">eTrak</Text>
+      <Text className="text-base text-zinc-600 dark:text-zinc-300">
+        Theme preview
+      </Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <View className="flex-row gap-2">
+        {modes.map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => setMode(m)}
+            className={`rounded-full px-4 py-2 transition-colors duration-300 ${
+              mode === m ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
+            }`}
+          >
+            <Text
+              className={mode === m ? 'text-white' : 'text-zinc-800 dark:text-zinc-200'}
+            >
+              {m}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+      <View className="flex-row gap-3">
+        {(Object.keys(accents) as AccentKey[]).map((key) => (
+          <Pressable
+            key={key}
+            onPress={() => setAccent(key)}
+            style={{ backgroundColor: `rgb(${accents[key]})` }}
+            className={`h-10 w-10 rounded-full ${
+              accent === key ? 'border-4 border-zinc-900 dark:border-white' : ''
+            }`}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === "web" && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        ))}
+      </View>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    flexDirection: "row",
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: "center",
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: "center",
-  },
-  code: {
-    textTransform: "uppercase",
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: "stretch",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});
