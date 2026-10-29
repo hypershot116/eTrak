@@ -1,0 +1,16 @@
+Help me build an expense tracker web app and android, IOS app.
+You will fill in the gaps. i will give general instructions.
+
+N.B. - Claude memory runs out fast. So i will need you to instruct me update and .txt file which will help me continue the project on other Ai or different claude account.
+
+1. Now the app should be able to use on website. The formatting must not break for changing browser window. It should adapt with any browser window size changing
+2. The app should be able to support dark mode and non dark mode, User should be able to change theme color.
+3. It will prompt a aesthetic way to update daily expense. They can edit previous daily expense details ( like add, remove, edit)
+4. Expense type can be added manually so it can pop up for quick input
+5. Also keep support of built in emoji, Don't put emoji upload option now.
+6. You must follow professional project update git repo style where it will be visible of every update, features, verions update in professional style.
+7. There should be different chart, graph for user preferences. option for report generation. user should be able to choose report style and download pdf.
+8. I will deploy this website live using free web hosting for both website and database. Also there should be a swagger UI.
+9. They must login using gmail/phone number now. Also data should be backed up either using their personal drive. Or in any way that should not force me to manage storage for my user.
+10. App should be fast and must support 120 hz
+11. App must be user friendly and fun to use. Easy to use. User must not feel difficult to navigate it.
