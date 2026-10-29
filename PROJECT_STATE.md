@@ -21,32 +21,34 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - Distribution: GitHub releases (Android APK) + PWA for iOS testing; store release later
 - Web performance requirement: sustained 60 fps; mobile 60/120Hz
 - iOS 120Hz flag set in app.json (CADisableMinimumFrameRateOnPhone)
+- app.json: name eTrak, slug/scheme etrak, web.output "static"
 - Commits: Conventional Commits via Husky + commitlint; SemVer, CHANGELOG later
 
 ## Environment notes
 - pnpm installed with `sudo npm install -g pnpm` (do NOT use corepack on this machine)
 - Do NOT run `pnpm dlx tailwindcss init` (pulls Tailwind 4); tailwind.config.js created by hand
+- NativeWind v4 needs react-native-css-interop resolvable by Metro: installed directly in apps/mobile (`pnpm add react-native-css-interop`); after config changes start with `pnpm exec expo start --clear`
 - Terminal paste may add stray characters (^[[200~): paste with Ctrl+Shift+V
 
 ## Git
 - main and develop pushed to origin (first commit 76a246f)
-- Current branch: feat/mobile-scaffold (not yet committed or pushed)
+- Current branch: feat/mobile-scaffold (changes not yet committed or pushed)
 
 ## Completed
 - [x] Monorepo, commitlint, husky, GitHub remote
 - [x] Expo app created in apps/mobile
 - [x] NativeWind config files in apps/mobile root (tailwind.config.js, global.css, babel.config.js, metro.config.js, nativewind-env.d.ts)
+- [x] global.css imported in src/app/_layout.tsx
+- [x] App renders on web at localhost:8081 (css-interop resolution error fixed)
 
-## In Progress (verify each item at the start of the next session)
-- [ ] src/app/_layout.tsx starts with: import "../../global.css";
-- [ ] app.json updated (ios.infoPlist 120Hz flag, name eTrak, slug/scheme etrak, web.output static)
-- [ ] src/app/index.tsx has temporary test line: <Text className="text-xl font-bold text-blue-500">Hello eTrak</Text> (and Text imported from react-native)
-- [ ] pnpm start, press w: test text renders large, bold, blue
+## In Progress
+- [ ] Add temporary test line to src/app/index.tsx (import Text from react-native; <Text className="text-xl font-bold text-blue-500">Hello eTrak</Text>) and confirm it renders large, bold, blue
+- [ ] Commit and push feat/mobile-scaffold
 
 ## Exact Next Steps
-1. Run the checks above and the web test; fix any errors
-2. Commit and push: git add . && git commit -m "feat: scaffold expo app with nativewind" && git push -u origin feat/mobile-scaffold
+1. Confirm blue "Hello eTrak" on web
+2. git add . && git commit -m "feat: scaffold expo app with nativewind" && git push -u origin feat/mobile-scaffold
 3. Merge feat/mobile-scaffold into develop
-4. Build theme system: light/dark toggle with smooth transition + accent palettes
+4. Theme system: light/dark toggle with smooth transition + accent palettes
 5. packages/shared: Zod schemas for expense and currency
 6. expo-sqlite + Drizzle data model (id, amount, currency, rate, category, timestamps, deletedAt, deviceId)
