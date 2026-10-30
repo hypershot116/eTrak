@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DbSmokeTest } from '@/db/smoke-test';
 import { accents, type AccentKey } from '@/theme/palettes';
 import { useThemeStore, type ThemeMode } from '@/theme/theme-store';
 
@@ -46,6 +47,8 @@ export default function HomeScreen() {
           />
         ))}
       </View>
+
+      <DbSmokeTest />
     </SafeAreaView>
   );
 }
