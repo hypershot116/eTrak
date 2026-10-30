@@ -1,4 +1,4 @@
-import type { Category } from '@etrak/shared';
+import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import {
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { createExpense } from '@/db/expenses-repo';
+import { createExpense, softDeleteExpense, updateExpense } from '@/db/expenses-repo';
 import { getSetting, setSetting } from '@/db/settings-repo';
 import { currencies, getCurrency } from '@/lib/currencies';
 import { parseAmountToMinor } from '@/lib/money';
@@ -19,29 +19,42 @@ import { parseAmountToMinor } from '@/lib/money';
 type Props = {
   visible: boolean;
   categories: Category[];
+  expense: Expense | null; // null = new expense, otherwise edit this one
   onClose: () => void;
   onSaved: () => void;
 };
 
-export function ExpenseSheet({ visible, categories, onClose, onSaved }: Props) {
+export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }: Props) {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isEdit = expense !== null;
 
   useEffect(() => {
     if (!visible) return;
+    setError(null);
+    setConfirmDelete(false);
+    if (expense) {
+      const digits = getCurrency(expense.currency).digits;
+      setAmount((expense.amountMinor / 10 ** digits).toFixed(digits));
+      setCurrency(expense.currency);
+      setCategoryId(expense.categoryId);
+      setNote(expense.note);
+      return;
+    }
     setAmount('');
     setNote('');
-    setError(null);
     setCategoryId((prev) => prev ?? categories[0]?.id ?? null);
     getSetting('last_currency').then((c) => {
       if (c) setCurrency(c);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, expense]);
 
   if (!visible) return null;
 
@@ -63,10 +76,39 @@ export function ExpenseSheet({ visible, categories, onClose, onSaved }: Props) {
     }
     try {
       setSaving(true);
-      await createExpense({ amountMinor: minor, currency, categoryId, note: note.trim() });
+      if (expense) {
+        await updateExpense(expense.id, {
+          amountMinor: minor,
+          currency,
+          categoryId,
+          note: note.trim(),
+        });
+      } else {
+        await createExpense({ amountMinor: minor, currency, categoryId, note: note.trim() });
+      }
       await setSetting('last_currency', currency);
       try {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+      onSaved();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!expense) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    try {
+      setSaving(true);
+      await softDeleteExpense(expense.id);
+      try {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } catch {}
       onSaved();
     } catch (e) {
@@ -83,7 +125,7 @@ export function ExpenseSheet({ visible, categories, onClose, onSaved }: Props) {
         <View className="w-full max-w-xl gap-4 self-center rounded-t-3xl bg-white p-5 dark:bg-zinc-900">
           <View className="flex-row items-center justify-between">
             <Text className="text-lg font-semibold text-zinc-900 dark:text-white">
-              New expense
+              {isEdit ? 'Edit expense' : 'New expense'}
             </Text>
             <Pressable onPress={onClose}>
               <Text className="text-xl text-zinc-500">✕</Text>
@@ -157,15 +199,34 @@ export function ExpenseSheet({ visible, categories, onClose, onSaved }: Props) {
 
           {error ? <Text className="text-sm text-red-500">{error}</Text> : null}
 
-          <Pressable
-            onPress={save}
-            disabled={saving}
-            className="items-center rounded-2xl bg-accent py-3"
-          >
-            <Text className="text-base font-semibold text-white">
-              {saving ? 'Saving...' : 'Save expense'}
-            </Text>
-          </Pressable>
+          <View className="flex-row gap-3">
+            {isEdit ? (
+              <Pressable
+                onPress={remove}
+                disabled={saving}
+                className={`items-center justify-center rounded-2xl px-5 py-3 ${
+                  confirmDelete ? 'bg-red-500' : 'bg-red-500/15'
+                }`}
+              >
+                <Text
+                  className={`text-base font-semibold ${
+                    confirmDelete ? 'text-white' : 'text-red-500'
+                  }`}
+                >
+                  {confirmDelete ? 'Tap again to delete' : 'Delete'}
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={save}
+              disabled={saving}
+              className="flex-1 items-center rounded-2xl bg-accent py-3"
+            >
+              <Text className="text-base font-semibold text-white">
+                {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Save expense'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
