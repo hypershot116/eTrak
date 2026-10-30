@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpenses } from '@/db/expenses-repo';
@@ -56,7 +57,7 @@ export default function HomeScreen() {
       <View className="w-full max-w-2xl flex-1 self-center px-5">
         <Text className="py-4 text-3xl font-bold text-accent">eTrak</Text>
 
-        {error ? <Text className="pb-2 text-sm text-red-500">Database error: {error}</Text> : null}
+        <DbErrorBanner error={error} />
 
         <FlatList
           data={expenses}

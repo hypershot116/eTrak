@@ -50,8 +50,9 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
     setAmount('');
     setNote('');
     setCategoryId((prev) => prev ?? categories[0]?.id ?? null);
-    getSetting('last_currency').then((c) => {
-      if (c) setCurrency(c);
+    getSetting('last_currency').then(async (c) => {
+      const preferred = c ?? (await getSetting('main_currency'));
+      if (preferred) setCurrency(preferred);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, expense]);
