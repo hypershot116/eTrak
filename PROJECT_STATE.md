@@ -67,7 +67,7 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 
 - GitHub branches: main, develop, feat/mobile-scaffold, feat/theme-system, feat/shared-schemas, feat/local-database (pushed once the commands are run)
 - feat/local-database and feat/shared-schemas being merged into develop (commands given, pending user confirmation)
-- Current branch: feat/data-layer (new); changes not yet committed
+- Current branch: feat/data-layer; changes not yet committed
 
 ## Completed
 
@@ -76,20 +76,18 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - [x] Theme system code, merged into develop
 - [x] packages/shared (currency, category, expense Zod schemas) committed and pushed
 - [x] SQLite web smoke test passed (persistent across reloads)
-- [x] Data layer files created (migrations, client, repositories, test panel); expo-crypto installed
+- [x] Data layer files created (migrations, client, repositories, test panel); expo-crypto installed; client.ts uses globalThis-cached connection
 
 ## In Progress
 
-- [ ] BLOCKER: web error "createSyncAccessHandle ... another open Access Handle" (database file locked). Steps given: close all localhost tabs, restart pnpm start, open one tab; client.ts replaced with globalThis-cached connection (pending user confirmation)
-- [ ] Test on web: 6 default categories shown; add test expense; survives reload; delete works
-- [ ] Slow loading: likely --clear / dev mode / the locked database; user to confirm after the fix
-- [ ] Commit and push feat/data-layer
+- [ ] Confirm the "Access Handle" error is gone: one tab only, 6 default categories shown, add test expense, survives browser reload, delete works (user has not reported the result yet)
+- [ ] Slow loading: likely --clear / dev mode / locked database; user to confirm after the fix
+- [ ] Commit, push, merge feat/data-layer into develop (commands given)
 
 ## Exact Next Steps
 
-1. User closes all localhost tabs, restarts `pnpm start`, applies the client.ts fix, opens ONE tab and reports the text under the color circles
-2. If the error persists: user pastes the first error line and the number of open tabs/windows; consider quitting Chrome completely
-3. Commit, push, merge feat/data-layer into develop
+1. User reports the Step 1 check result (or the first line of any error, plus number of open tabs)
+2. Run the commit/merge commands; create branch feat/expense-entry
+3. Build expense entry sheet (amount, currency, category chips, note) and real expense list; replace theme preview and test panel
 4. Add updateExpense, category edit/delete, settings helpers (main currency, theme, accent persisted), friendly "open in another tab" message
-5. Expense entry bottom sheet with category chips and currency picker; real home/list screen with FlashList (replace theme preview and test panel)
-6. Production web build and 60 fps measurement; dashboard charts, PDF export, Google sign-in + Drive backup/sync, Swagger API
+5. Production web build and 60 fps measurement; dashboard charts, PDF export, Google sign-in + Drive backup/sync, Swagger API
