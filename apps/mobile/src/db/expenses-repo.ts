@@ -95,3 +95,37 @@ export async function softDeleteExpense(id: string) {
     id
   );
 }
+
+export type ExpenseChanges = {
+  amountMinor: number;
+  currency: string;
+  categoryId: string;
+  note: string;
+};
+
+// Edit an existing expense. Re-validates the whole record and bumps updatedAt/deviceId for sync.
+export async function updateExpense(id: string, changes: ExpenseChanges): Promise<Expense> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<Row>(
+    'SELECT * FROM expenses WHERE id = ? AND deleted_at IS NULL',
+    id
+  );
+  if (!row) throw new Error('Expense not found');
+  const e = expenseSchema.parse({
+    ...fromRow(row),
+    ...changes,
+    updatedAt: Date.now(),
+    deviceId: await getDeviceId(),
+  });
+  await db.runAsync(
+    `UPDATE expenses SET amount_minor = ?, currency = ?, category_id = ?, note = ?, updated_at = ?, device_id = ? WHERE id = ?`,
+    e.amountMinor,
+    e.currency,
+    e.categoryId,
+    e.note,
+    e.updatedAt,
+    e.deviceId,
+    id
+  );
+  return e;
+}

@@ -5,13 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
-import { listExpenses, softDeleteExpense } from '@/db/expenses-repo';
+import { listExpenses } from '@/db/expenses-repo';
 import { formatMinor } from '@/lib/money';
 
 export default function HomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -31,13 +32,14 @@ export default function HomeScreen() {
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
-  const remove = async (id: string) => {
-    try {
-      await softDeleteExpense(id);
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    }
+  const openNew = () => {
+    setEditing(null);
+    setSheetOpen(true);
+  };
+
+  const openEdit = (expense: Expense) => {
+    setEditing(expense);
+    setSheetOpen(true);
   };
 
   return (
@@ -59,7 +61,10 @@ export default function HomeScreen() {
           renderItem={({ item }) => {
             const cat = categoryById.get(item.categoryId);
             return (
-              <View className="flex-row items-center gap-3 border-b border-zinc-200 py-3 dark:border-zinc-800">
+              <Pressable
+                onPress={() => openEdit(item)}
+                className="flex-row items-center gap-3 border-b border-zinc-200 py-3 active:opacity-60 dark:border-zinc-800"
+              >
                 <Text className="text-2xl">{cat?.emoji ?? '❓'}</Text>
                 <View className="flex-1">
                   <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
@@ -80,17 +85,14 @@ export default function HomeScreen() {
                     })}
                   </Text>
                 </View>
-                <Pressable onPress={() => remove(item.id)}>
-                  <Text className="text-sm text-red-500">delete</Text>
-                </Pressable>
-              </View>
+              </Pressable>
             );
           }}
         />
       </View>
 
       <Pressable
-        onPress={() => setSheetOpen(true)}
+        onPress={openNew}
         className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-accent"
       >
         <Text className="text-3xl text-white">+</Text>
@@ -99,6 +101,7 @@ export default function HomeScreen() {
       <ExpenseSheet
         visible={sheetOpen}
         categories={categories}
+        expense={editing}
         onClose={() => setSheetOpen(false)}
         onSaved={() => {
           setSheetOpen(false);
