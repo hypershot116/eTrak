@@ -13,16 +13,19 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - App: Expo SDK 58 + Expo Router + TypeScript (template uses src/app/ and an AppTabs tab layout), NativeWind v4 + Tailwind ^3.4.17
 - State: Zustand 5 (theme store in src/theme/)
 - Theming: NativeWind darkMode "class"; useColorScheme from 'nativewind' (setColorScheme for light/dark/system); accent color via CSS variable --accent (set with vars() in ThemeRoot), Tailwind color "accent". Do NOT use bg-accent inside react-native Modal on web (portal is outside ThemeRoot): sheets are rendered as absolute overlays instead
-- \_layout.tsx: ThemeRoot wraps expo-router ThemeProvider, AnimatedSplashOverlay and AppTabs
+- _layout.tsx: ThemeRoot wraps expo-router ThemeProvider, AnimatedSplashOverlay and AppTabs
 - Tabs (src/components/app-tabs.tsx): NativeTabs with "index" (label Expenses, home icon) and "explore" (label Settings, explore icon); uses nativewind useColorScheme so the tab bar follows the in-app theme. Route file explore.tsx kept (label only renamed); a dedicated settings icon asset is still to add
-- Shared package: @etrak/shared (packages/shared, Zod schemas: currency, category, expense; main = src/index.ts); consumed by apps/mobile via workspace:\*
+- Shared package: @etrak/shared (packages/shared, Zod schemas: currency, category, expense; main = src/index.ts); consumed by apps/mobile via workspace:*
 - Data layer (apps/mobile/src/db): expo-sqlite async API with plain SQL (NO Drizzle), Zod validation from @etrak/shared
   - migrations.ts: versioned SQL migrations using PRAGMA user_version (tables: categories, expenses, settings)
   - client.ts: getDb() singleton connection (etrak.db) stored on globalThis (survives hot reloads; one connection per browser tab), newId() via expo-crypto randomUUID, getDeviceId() stored in settings
   - categories-repo.ts: listCategories, createCategory, ensureDefaultCategories (Food, Transport, Shopping, Bills, Health, Fun)
-  - expenses-repo.ts: createExpense, listExpenses, softDeleteExpense (updateExpense still to add)
+  - expenses-repo.ts: createExpense, listExpenses(limit), updateExpense(id, {amountMinor, currency, categoryId, note}), softDeleteExpense. Rows map snake_case columns to camelCase via fromRow + expenseSchema.parse; every write bumps updated_at and device_id
   - settings-repo.ts: getSetting, setSetting (keys so far: device_id, last_currency)
-- UI (apps/mobile/src): app/index.tsx = expense list (FlatList; to be upgraded to FlashList) + floating + button; components/expense-sheet.tsx = entry sheet (amount, currency chips, category chips, note, haptics); app/explore.tsx = Settings screen with ThemePanel; theme/theme-panel.tsx
+- UI (apps/mobile/src):
+  - app/index.tsx = expense list (FlatList; to be upgraded to FlashList) + floating + button; tapping a row opens it in the sheet for editing
+  - components/expense-sheet.tsx = entry/edit sheet (prop expense: Expense | null; null = new). Fields: amount, currency chips, category chips, note, haptics. Edit mode shows a Delete button that needs a second tap to confirm (Alert.alert is unreliable on web)
+  - app/explore.tsx = Settings screen with ThemePanel; theme/theme-panel.tsx
 - Helpers: lib/currencies.ts (10 currencies with decimal digits), lib/money.ts (parseAmountToMinor, formatMinor)
 - SQLite on web: confirmed working (survives reloads); stored in the browser's private file system (OPFS)
 - metro.config.js: NativeWind + wasm asset support + COEP (credentialless) / COOP (same-origin) headers for expo-sqlite on web
@@ -44,17 +47,18 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - app.json: name eTrak, slug/scheme etrak, web.output "static"
 - Commits: Conventional Commits via Husky + commitlint; SemVer, CHANGELOG later
 - Theme and accent choice currently in memory only; to be persisted in settings table
-- Git workflow: main = stable releases only; develop = integration branch; feat/\* = feature branches merged locally with `git merge --no-ff` (no pull requests for now)
+- Git workflow: main = stable releases only; develop = integration branch; feat/* = feature branches merged locally with `git merge --no-ff` (no pull requests for now)
 - Drizzle ORM dropped: its Expo driver relies on synchronous SQLite calls, which are not available in Expo SQLite web (alpha); plain async SQL + Zod instead
 - Web hosting (later) must send Cross-Origin-Embedder-Policy: credentialless and Cross-Origin-Opener-Policy: same-origin
 - Known web limitation: only ONE browser tab can open the database at a time (OPFS single access handle). TODO: friendly "eTrak is already open in another tab" message
+- Expense date cannot be edited yet; to be added with the date filtering work
 
 ## Environment notes
 
 - pnpm installed with `sudo npm install -g pnpm` (do NOT use corepack on this machine)
 - Do NOT run `pnpm dlx tailwindcss init` (pulls Tailwind 4); tailwind.config.js created by hand
 - NativeWind v4 needs react-native-css-interop resolvable by Metro: installed directly in apps/mobile
-- Start the app with `pnpm start`; use `pnpm exec expo start --clear` ONLY after changing config files (metro/tailwind/babel)
+- Start the app with `pnpm start` (from apps/mobile); use `pnpm exec expo start --clear` ONLY after changing config files (metro/tailwind/babel)
 - Dev server is slower than production: first load after start is the slowest, later reloads are fast
 - Error "createSyncAccessHandle ... another open Access Handle": another browser tab holds the database. Fix: close all localhost:8081 tabs, restart `pnpm start`, open ONE tab; if it persists, quit Chrome completely
 - Terminal paste may add stray characters (^[[200~): paste with Ctrl+Shift+V
@@ -68,57 +72,28 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 
 ## Git
 
-<<<<<<< HEAD
-- GitHub branches: main, develop, feat/mobile-scaffold, feat/theme-system, feat/shared-schemas, feat/local-database, feat/data-layer (pushed/merged once the commands are run)
-- feat/data-layer merged into develop (commands given, pending user confirmation)
-- Current branch: feat/expense-entry; changes not yet committed
-=======
-- GitHub branches: main, develop, feat/mobile-scaffold, feat/theme-system, feat/shared-schemas, feat/local-database (pushed once the commands are run)
-- feat/local-database and feat/shared-schemas being merged into develop (commands given, pending user confirmation)
-- Current branch: feat/data-layer; changes not yet committed
->>>>>>> feat/expense-entry
+- Branches on GitHub: main, develop, feat/mobile-scaffold, feat/theme-system, feat/shared-schemas, feat/local-database, feat/data-layer, feat/expense-entry, feat/expense-edit
+- feat/expense-entry and feat/expense-edit merged into develop
+- Current branch: feat/categories (just created, no changes yet)
 
 ## Completed
 
 - [x] Monorepo, commitlint, husky, GitHub remote
 - [x] Expo app created in apps/mobile; NativeWind configured; renders on web
-<<<<<<< HEAD
 - [x] Theme system (light/dark/system + 5 accent colors)
 - [x] packages/shared (currency, category, expense Zod schemas)
-- [x] SQLite data layer working on web (default categories, add expense, survives reload, soft delete) - confirmed by user
-- [x] app-tabs.tsx received from user and rewritten (tabs: Expenses, Settings; theme-aware)
+- [x] SQLite data layer working on web (default categories, add expense, survives reload, soft delete)
+- [x] Expense entry sheet, expense list, Settings screen, themed tabs (all web checks passed)
+- [x] Edit and delete expenses (updateExpense, tap row to edit, two-tap delete)
 
 ## In Progress
 
-- [ ] feat/expense-entry: helper files, expense sheet, new home list, settings screen created (commands given); expo-haptics installed; app-tabs.tsx replaced
-- [ ] Test on web (user has not reported results yet): 1) home shows eTrak + empty state; 2) + opens sheet; 3) save 12.5 with category and note adds a row; 4) row survives browser reload; 5) invalid amount shows red message; 6) JPY with 500.5 asks for whole amount; 7) Settings tab has theme controls and dark mode looks right; plus tabs read "Expenses" and "Settings" and follow dark mode
-- [ ] Commit and push feat/expense-entry
+- [ ] feat/categories: category management (add with built-in emoji picker, edit, delete) so custom types appear as quick-pick chips in the sheet (requirement #4)
 
 ## Exact Next Steps
 
-1. User reports which checks work (and the first lines of any error)
-2. Commit, push, merge feat/expense-entry into develop
-3. Edit expense (updateExpense), category management (add with emoji, edit, delete), persist theme/accent in settings, main currency setting, friendly "open in another tab" message, proper settings tab icon
-4. Upgrade list to FlashList; month filter; totals
-5. Dashboard charts (monthly, category donut, trend), PDF report export, exchange rates
-6. Production web build and 60 fps measurement; Google sign-in + Drive backup/sync; Swagger API
-=======
-- [x] Theme system code, merged into develop
-- [x] packages/shared (currency, category, expense Zod schemas) committed and pushed
-- [x] SQLite web smoke test passed (persistent across reloads)
-- [x] Data layer files created (migrations, client, repositories, test panel); expo-crypto installed; client.ts uses globalThis-cached connection
-
-## In Progress
-
-- [ ] Confirm the "Access Handle" error is gone: one tab only, 6 default categories shown, add test expense, survives browser reload, delete works (user has not reported the result yet)
-- [ ] Slow loading: likely --clear / dev mode / locked database; user to confirm after the fix
-- [ ] Commit, push, merge feat/data-layer into develop (commands given)
-
-## Exact Next Steps
-
-1. User reports the Step 1 check result (or the first line of any error, plus number of open tabs)
-2. Run the commit/merge commands; create branch feat/expense-entry
-3. Build expense entry sheet (amount, currency, category chips, note) and real expense list; replace theme preview and test panel
-4. Add updateExpense, category edit/delete, settings helpers (main currency, theme, accent persisted), friendly "open in another tab" message
-5. Production web build and 60 fps measurement; dashboard charts, PDF export, Google sign-in + Drive backup/sync, Swagger API
->>>>>>> feat/expense-entry
+1. Category management: needs categories-repo.ts, the category Zod schema, migrations.ts and app/explore.tsx pasted into the chat
+2. Persist theme/accent in settings, main currency setting, friendly "open in another tab" message, proper settings tab icon, expense date editing
+3. Upgrade list to FlashList; month filter; totals
+4. Dashboard charts (monthly, category donut, trend), PDF report export, exchange rates
+5. Production web build and 60 fps measurement; Google sign-in + Drive backup/sync; Swagger API
