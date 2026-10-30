@@ -1,5 +1,6 @@
 import type { Category, Expense } from '@etrak/shared';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +10,8 @@ import { listExpenses } from '@/db/expenses-repo';
 import { formatMinor } from '@/lib/money';
 
 export default function HomeScreen() {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]); // active, for the sheet
+  const [allCategories, setAllCategories] = useState<Category[]>([]); // incl. deleted, for names
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -19,6 +21,7 @@ export default function HomeScreen() {
     try {
       await ensureDefaultCategories();
       setCategories(await listCategories());
+      setAllCategories(await listCategories(true));
       setExpenses(await listExpenses(200));
       setError(null);
     } catch (e) {
@@ -26,11 +29,17 @@ export default function HomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  // Runs on first open and every time the user comes back to this tab.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
-  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const categoryById = useMemo(
+    () => new Map(allCategories.map((c) => [c.id, c])),
+    [allCategories]
+  );
 
   const openNew = () => {
     setEditing(null);

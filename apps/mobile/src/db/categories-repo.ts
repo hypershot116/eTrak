@@ -23,10 +23,13 @@ const fromRow = (r: Row): Category =>
     deviceId: r.device_id,
   });
 
-export async function listCategories(): Promise<Category[]> {
+// includeDeleted = true is for looking up names of old expenses whose category was removed.
+export async function listCategories(includeDeleted = false): Promise<Category[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
-    'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY name'
+    includeDeleted
+      ? 'SELECT * FROM categories ORDER BY name'
+      : 'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY name'
   );
   return rows.map(fromRow);
 }
@@ -54,6 +57,47 @@ export async function createCategory(name: string, emoji: string): Promise<Categ
     category.deviceId
   );
   return category;
+}
+
+// Rename a category or change its emoji. Bumps updatedAt/deviceId for sync.
+export async function updateCategory(
+  id: string,
+  changes: { name: string; emoji: string }
+): Promise<Category> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<Row>(
+    'SELECT * FROM categories WHERE id = ? AND deleted_at IS NULL',
+    id
+  );
+  if (!row) throw new Error('Category not found');
+  const category = categorySchema.parse({
+    ...fromRow(row),
+    ...changes,
+    updatedAt: Date.now(),
+    deviceId: await getDeviceId(),
+  });
+  await db.runAsync(
+    'UPDATE categories SET name = ?, emoji = ?, updated_at = ?, device_id = ? WHERE id = ?',
+    category.name,
+    category.emoji,
+    category.updatedAt,
+    category.deviceId,
+    id
+  );
+  return category;
+}
+
+// Soft delete: old expenses keep their category for history and reports.
+export async function softDeleteCategory(id: string) {
+  const db = await getDb();
+  const now = Date.now();
+  await db.runAsync(
+    'UPDATE categories SET deleted_at = ?, updated_at = ?, device_id = ? WHERE id = ?',
+    now,
+    now,
+    await getDeviceId(),
+    id
+  );
 }
 
 const defaults: [string, string][] = [
