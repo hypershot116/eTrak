@@ -1,54 +1,110 @@
-import { Pressable, Text, View } from 'react-native';
+import type { Category, Expense } from '@etrak/shared';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DataLayerTest } from '@/db/data-layer-test';
-import { accents, type AccentKey } from '@/theme/palettes';
-import { useThemeStore, type ThemeMode } from '@/theme/theme-store';
-
-const modes: ThemeMode[] = ['light', 'dark', 'system'];
+import { ExpenseSheet } from '@/components/expense-sheet';
+import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
+import { listExpenses, softDeleteExpense } from '@/db/expenses-repo';
+import { formatMinor } from '@/lib/money';
 
 export default function HomeScreen() {
-  const { mode, accent, setMode, setAccent } = useThemeStore();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      await ensureDefaultCategories();
+      setCategories(await listCategories());
+      setExpenses(await listExpenses(200));
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+
+  const remove = async (id: string) => {
+    try {
+      await softDeleteExpense(id);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
 
   return (
-    <SafeAreaView className="flex-1 items-center justify-center gap-6 px-6">
-      <Text className="text-4xl font-bold text-accent">eTrak</Text>
-      <Text className="text-base text-zinc-600 dark:text-zinc-300">
-        Theme preview
-      </Text>
+    <SafeAreaView className="flex-1">
+      <View className="w-full max-w-2xl flex-1 self-center px-5">
+        <Text className="py-4 text-3xl font-bold text-accent">eTrak</Text>
 
-      <View className="flex-row gap-2">
-        {modes.map((m) => (
-          <Pressable
-            key={m}
-            onPress={() => setMode(m)}
-            className={`rounded-full px-4 py-2 transition-colors duration-300 ${
-              mode === m ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
-            }`}
-          >
-            <Text
-              className={mode === m ? 'text-white' : 'text-zinc-800 dark:text-zinc-200'}
-            >
-              {m}
+        {error ? <Text className="pb-2 text-sm text-red-500">Database error: {error}</Text> : null}
+
+        <FlatList
+          data={expenses}
+          keyExtractor={(e) => e.id}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          ListEmptyComponent={
+            <Text className="pt-10 text-center text-zinc-500 dark:text-zinc-400">
+              No expenses yet. Tap + to add your first one.
             </Text>
-          </Pressable>
-        ))}
+          }
+          renderItem={({ item }) => {
+            const cat = categoryById.get(item.categoryId);
+            return (
+              <View className="flex-row items-center gap-3 border-b border-zinc-200 py-3 dark:border-zinc-800">
+                <Text className="text-2xl">{cat?.emoji ?? '❓'}</Text>
+                <View className="flex-1">
+                  <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
+                    {cat?.name ?? 'Unknown'}
+                  </Text>
+                  {item.note ? (
+                    <Text className="text-sm text-zinc-500 dark:text-zinc-400">{item.note}</Text>
+                  ) : null}
+                </View>
+                <View className="items-end">
+                  <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    {formatMinor(item.amountMinor, item.currency)}
+                  </Text>
+                  <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {new Date(item.spentAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                </View>
+                <Pressable onPress={() => remove(item.id)}>
+                  <Text className="text-sm text-red-500">delete</Text>
+                </Pressable>
+              </View>
+            );
+          }}
+        />
       </View>
 
-      <View className="flex-row gap-3">
-        {(Object.keys(accents) as AccentKey[]).map((key) => (
-          <Pressable
-            key={key}
-            onPress={() => setAccent(key)}
-            style={{ backgroundColor: `rgb(${accents[key]})` }}
-            className={`h-10 w-10 rounded-full ${
-              accent === key ? 'border-4 border-zinc-900 dark:border-white' : ''
-            }`}
-          />
-        ))}
-      </View>
+      <Pressable
+        onPress={() => setSheetOpen(true)}
+        className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-accent"
+      >
+        <Text className="text-3xl text-white">+</Text>
+      </Pressable>
 
-      <DataLayerTest />
+      <ExpenseSheet
+        visible={sheetOpen}
+        categories={categories}
+        onClose={() => setSheetOpen(false)}
+        onSaved={() => {
+          setSheetOpen(false);
+          refresh();
+        }}
+      />
     </SafeAreaView>
   );
 }
