@@ -7,30 +7,39 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
-import { listExpenses } from '@/db/expenses-repo';
+import { listExpensesInRange } from '@/db/expenses-repo';
+import { monthLabel, monthRange } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
 
 export default function HomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]); // active, for the sheet
   const [allCategories, setAllCategories] = useState<Category[]>([]); // incl. deleted, for names
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const now = new Date();
+  const isCurrentMonth = month.y === now.getFullYear() && month.m === now.getMonth();
 
   const refresh = useCallback(async () => {
     try {
       await ensureDefaultCategories();
       setCategories(await listCategories());
       setAllCategories(await listCategories(true));
-      setExpenses(await listExpenses(200));
+      const [start, end] = monthRange(month.y, month.m);
+      setExpenses(await listExpensesInRange(start, end));
       setError(null);
     } catch (e) {
       setError(String(e));
     }
-  }, []);
+  }, [month]);
 
-  // Runs on first open and every time the user comes back to this tab.
+  // Runs on first open, when the month changes, and when the user returns to this tab.
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -41,6 +50,20 @@ export default function HomeScreen() {
     () => new Map(allCategories.map((c) => [c.id, c])),
     [allCategories]
   );
+
+  // Totals per currency (no conversion until exchange rates are added).
+  const totals = useMemo(() => {
+    const sums = new Map<string, number>();
+    for (const e of expenses) sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
+    return [...sums.entries()].sort((a, b) => b[1] - a[1]);
+  }, [expenses]);
+
+  const shiftMonth = (delta: number) => {
+    setMonth((prev) => {
+      const d = new Date(prev.y, prev.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+  };
 
   const openNew = () => {
     setEditing(null);
@@ -59,13 +82,49 @@ export default function HomeScreen() {
 
         <DbErrorBanner error={error} />
 
+        <View className="mb-3 flex-row items-center justify-between">
+          <Pressable
+            onPress={() => shiftMonth(-1)}
+            className="h-10 w-10 items-center justify-center rounded-full bg-zinc-200 active:opacity-60 dark:bg-zinc-800"
+          >
+            <Text className="text-xl text-zinc-800 dark:text-zinc-200">‹</Text>
+          </Pressable>
+          <Text className="text-lg font-semibold text-zinc-900 dark:text-white">
+            {monthLabel(month.y, month.m)}
+          </Text>
+          <Pressable
+            onPress={() => shiftMonth(1)}
+            disabled={isCurrentMonth}
+            className={`h-10 w-10 items-center justify-center rounded-full bg-zinc-200 active:opacity-60 dark:bg-zinc-800 ${
+              isCurrentMonth ? 'opacity-30' : ''
+            }`}
+          >
+            <Text className="text-xl text-zinc-800 dark:text-zinc-200">›</Text>
+          </Pressable>
+        </View>
+
+        {totals.length > 0 ? (
+          <View className="mb-2 gap-1 rounded-2xl bg-zinc-100 p-4 dark:bg-zinc-900">
+            <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
+              Spent this month · {expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}
+            </Text>
+            {totals.map(([code, minor]) => (
+              <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
+                {formatMinor(minor, code)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
         <FlatList
           data={expenses}
           keyExtractor={(e) => e.id}
           contentContainerStyle={{ paddingBottom: 120 }}
           ListEmptyComponent={
             <Text className="pt-10 text-center text-zinc-500 dark:text-zinc-400">
-              No expenses yet. Tap + to add your first one.
+              {isCurrentMonth
+                ? 'No expenses yet this month. Tap + to add one.'
+                : 'No expenses in this month.'}
             </Text>
           }
           renderItem={({ item }) => {

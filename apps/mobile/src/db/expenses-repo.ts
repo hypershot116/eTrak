@@ -132,3 +132,14 @@ export async function updateExpense(id: string, changes: ExpenseChanges): Promis
   );
   return e;
 }
+
+// Expenses with startMs <= spentAt < endMs, newest first.
+export async function listExpensesInRange(startMs: number, endMs: number): Promise<Expense[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<Row>(
+    'SELECT * FROM expenses WHERE deleted_at IS NULL AND spent_at >= ? AND spent_at < ? ORDER BY spent_at DESC, created_at DESC',
+    startMs,
+    endMs
+  );
+  return rows.map(fromRow);
+}

@@ -26,3 +26,15 @@ export function dateInputToMs(text: string, timeFromMs: number): number | null {
   if (out.getFullYear() !== y || out.getMonth() !== mo - 1 || out.getDate() !== d) return null;
   return out.getTime();
 }
+
+// Start (inclusive) and end (exclusive) of a month, in epoch ms. month is 0-11.
+export function monthRange(year: number, month: number): [number, number] {
+  return [new Date(year, month, 1).getTime(), new Date(year, month + 1, 1).getTime()];
+}
+
+export function monthLabel(year: number, month: number): string {
+  return new Date(year, month, 1).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+}
