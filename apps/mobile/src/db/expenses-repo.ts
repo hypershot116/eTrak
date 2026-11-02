@@ -77,7 +77,7 @@ export async function createExpense(input: NewExpense): Promise<Expense> {
 export async function listExpenses(limit = 50): Promise<Expense[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
-    'SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY spent_at DESC LIMIT ?',
+    'SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY spent_at DESC, created_at DESC LIMIT ?',
     limit
   );
   return rows.map(fromRow);
@@ -101,6 +101,7 @@ export type ExpenseChanges = {
   currency: string;
   categoryId: string;
   note: string;
+  spentAt?: number; // epoch ms; omit to keep the current date
 };
 
 // Edit an existing expense. Re-validates the whole record and bumps updatedAt/deviceId for sync.
@@ -114,15 +115,17 @@ export async function updateExpense(id: string, changes: ExpenseChanges): Promis
   const e = expenseSchema.parse({
     ...fromRow(row),
     ...changes,
+    spentAt: changes.spentAt ?? row.spent_at,
     updatedAt: Date.now(),
     deviceId: await getDeviceId(),
   });
   await db.runAsync(
-    `UPDATE expenses SET amount_minor = ?, currency = ?, category_id = ?, note = ?, updated_at = ?, device_id = ? WHERE id = ?`,
+    `UPDATE expenses SET amount_minor = ?, currency = ?, category_id = ?, note = ?, spent_at = ?, updated_at = ?, device_id = ? WHERE id = ?`,
     e.amountMinor,
     e.currency,
     e.categoryId,
     e.note,
+    e.spentAt,
     e.updatedAt,
     e.deviceId,
     id

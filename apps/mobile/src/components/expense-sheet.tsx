@@ -14,6 +14,7 @@ import {
 import { createExpense, softDeleteExpense, updateExpense } from '@/db/expenses-repo';
 import { getSetting, setSetting } from '@/db/settings-repo';
 import { currencies, getCurrency } from '@/lib/currencies';
+import { dateInputToMs, dayOffset, toDateInput } from '@/lib/dates';
 import { parseAmountToMinor } from '@/lib/money';
 
 type Props = {
@@ -29,6 +30,7 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
   const [currency, setCurrency] = useState('USD');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [dateText, setDateText] = useState(dayOffset(0));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -45,10 +47,12 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       setCurrency(expense.currency);
       setCategoryId(expense.categoryId);
       setNote(expense.note);
+      setDateText(toDateInput(expense.spentAt));
       return;
     }
     setAmount('');
     setNote('');
+    setDateText(dayOffset(0));
     setCategoryId((prev) => prev ?? categories[0]?.id ?? null);
     getSetting('last_currency').then(async (c) => {
       const preferred = c ?? (await getSetting('main_currency'));
@@ -60,6 +64,8 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
   if (!visible) return null;
 
   const cur = getCurrency(currency);
+  const today = dayOffset(0);
+  const yesterday = dayOffset(-1);
 
   const save = async () => {
     const minor = parseAmountToMinor(amount, cur.digits);
@@ -75,6 +81,24 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       setError('Choose a category');
       return;
     }
+
+    // Date: keep the original timestamp if the date wasn't changed.
+    let spentAt: number;
+    if (expense && dateText.trim() === toDateInput(expense.spentAt)) {
+      spentAt = expense.spentAt;
+    } else {
+      const ms = dateInputToMs(dateText, expense ? expense.spentAt : Date.now());
+      if (ms === null) {
+        setError('Enter the date as YYYY-MM-DD, for example 2026-11-01');
+        return;
+      }
+      if (dateText.trim() > today) {
+        setError("The date can't be in the future");
+        return;
+      }
+      spentAt = ms;
+    }
+
     try {
       setSaving(true);
       if (expense) {
@@ -83,9 +107,16 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
           currency,
           categoryId,
           note: note.trim(),
+          spentAt,
         });
       } else {
-        await createExpense({ amountMinor: minor, currency, categoryId, note: note.trim() });
+        await createExpense({
+          amountMinor: minor,
+          currency,
+          categoryId,
+          note: note.trim(),
+          spentAt,
+        });
       }
       await setSetting('last_currency', currency);
       try {
@@ -118,6 +149,11 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       setSaving(false);
     }
   };
+
+  const chip = (active: boolean) =>
+    `rounded-full px-3 py-1.5 ${active ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'}`;
+  const chipText = (active: boolean) =>
+    active ? 'text-white' : 'text-zinc-800 dark:text-zinc-200';
 
   return (
     <View className="absolute inset-0 z-10 justify-end bg-black/40">
@@ -153,17 +189,9 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
                 <Pressable
                   key={c.code}
                   onPress={() => setCurrency(c.code)}
-                  className={`rounded-full px-3 py-1.5 ${
-                    currency === c.code ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
-                  }`}
+                  className={chip(currency === c.code)}
                 >
-                  <Text
-                    className={
-                      currency === c.code ? 'text-white' : 'text-zinc-800 dark:text-zinc-200'
-                    }
-                  >
-                    {c.code}
-                  </Text>
+                  <Text className={chipText(currency === c.code)}>{c.code}</Text>
                 </Pressable>
               ))}
             </View>
@@ -174,19 +202,33 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
               <Pressable
                 key={c.id}
                 onPress={() => setCategoryId(c.id)}
-                className={`rounded-full px-3 py-1.5 ${
-                  categoryId === c.id ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
-                }`}
+                className={chip(categoryId === c.id)}
               >
-                <Text
-                  className={
-                    categoryId === c.id ? 'text-white' : 'text-zinc-800 dark:text-zinc-200'
-                  }
-                >
+                <Text className={chipText(categoryId === c.id)}>
                   {c.emoji} {c.name}
                 </Text>
               </Pressable>
             ))}
+          </View>
+
+          <View className="flex-row items-center gap-2">
+            <Pressable onPress={() => setDateText(today)} className={chip(dateText === today)}>
+              <Text className={chipText(dateText === today)}>Today</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setDateText(yesterday)}
+              className={chip(dateText === yesterday)}
+            >
+              <Text className={chipText(dateText === yesterday)}>Yesterday</Text>
+            </Pressable>
+            <TextInput
+              value={dateText}
+              onChangeText={setDateText}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#a1a1aa"
+              maxLength={10}
+              className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-1.5 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
+            />
           </View>
 
           <TextInput
