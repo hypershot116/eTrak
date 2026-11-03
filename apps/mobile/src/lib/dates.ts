@@ -38,3 +38,15 @@ export function monthLabel(year: number, month: number): string {
     year: 'numeric',
   });
 }
+
+// "Today", "Yesterday", or e.g. "Monday, Nov 2"
+export function dayLabel(ms: number): string {
+  const key = toDateInput(ms);
+  if (key === dayOffset(0)) return 'Today';
+  if (key === dayOffset(-1)) return 'Yesterday';
+  return new Date(ms).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}

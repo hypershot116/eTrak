@@ -8,8 +8,12 @@ import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
-import { monthLabel, monthRange } from '@/lib/dates';
+import { dayLabel, monthLabel, monthRange, toDateInput } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
+
+type Row =
+  | { kind: 'day'; key: string; label: string; total: string }
+  | { kind: 'expense'; key: string; expense: Expense };
 
 export default function HomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]); // active, for the sheet
@@ -56,6 +60,30 @@ export default function HomeScreen() {
     const sums = new Map<string, number>();
     for (const e of expenses) sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
     return [...sums.entries()].sort((a, b) => b[1] - a[1]);
+  }, [expenses]);
+
+  // Expenses are already newest first; add a header row whenever the day changes.
+  const rows = useMemo<Row[]>(() => {
+    const days = new Map<string, Expense[]>();
+    for (const e of expenses) {
+      const k = toDateInput(e.spentAt);
+      const list = days.get(k) ?? [];
+      list.push(e);
+      days.set(k, list);
+    }
+    const out: Row[] = [];
+    for (const [k, list] of days) {
+      const sums = new Map<string, number>();
+      for (const e of list) sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
+      out.push({
+        kind: 'day',
+        key: `day-${k}`,
+        label: dayLabel(list[0].spentAt),
+        total: [...sums.entries()].map(([c, n]) => formatMinor(n, c)).join(' · '),
+      });
+      for (const e of list) out.push({ kind: 'expense', key: e.id, expense: e });
+    }
+    return out;
   }, [expenses]);
 
   const shiftMonth = (delta: number) => {
@@ -117,8 +145,8 @@ export default function HomeScreen() {
         ) : null}
 
         <FlatList
-          data={expenses}
-          keyExtractor={(e) => e.id}
+          data={rows}
+          keyExtractor={(r) => r.key}
           contentContainerStyle={{ paddingBottom: 120 }}
           ListEmptyComponent={
             <Text className="pt-10 text-center text-zinc-500 dark:text-zinc-400">
@@ -128,10 +156,21 @@ export default function HomeScreen() {
             </Text>
           }
           renderItem={({ item }) => {
-            const cat = categoryById.get(item.categoryId);
+            if (item.kind === 'day') {
+              return (
+                <View className="flex-row items-baseline justify-between pb-1 pt-5">
+                  <Text className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    {item.label}
+                  </Text>
+                  <Text className="text-xs text-zinc-500 dark:text-zinc-400">{item.total}</Text>
+                </View>
+              );
+            }
+            const e = item.expense;
+            const cat = categoryById.get(e.categoryId);
             return (
               <Pressable
-                onPress={() => openEdit(item)}
+                onPress={() => openEdit(e)}
                 className="flex-row items-center gap-3 border-b border-zinc-200 py-3 active:opacity-60 dark:border-zinc-800"
               >
                 <Text className="text-2xl">{cat?.emoji ?? '❓'}</Text>
@@ -139,21 +178,13 @@ export default function HomeScreen() {
                   <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
                     {cat?.name ?? 'Unknown'}
                   </Text>
-                  {item.note ? (
-                    <Text className="text-sm text-zinc-500 dark:text-zinc-400">{item.note}</Text>
+                  {e.note ? (
+                    <Text className="text-sm text-zinc-500 dark:text-zinc-400">{e.note}</Text>
                   ) : null}
                 </View>
-                <View className="items-end">
-                  <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                    {formatMinor(item.amountMinor, item.currency)}
-                  </Text>
-                  <Text className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {new Date(item.spentAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </Text>
-                </View>
+                <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                  {formatMinor(e.amountMinor, e.currency)}
+                </Text>
               </Pressable>
             );
           }}
