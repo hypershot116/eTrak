@@ -1,6 +1,6 @@
 # PROJECT_STATE.md
 
-_Last updated: 2026-11-03 · Session #1_
+_Last updated: 2026-11-04 · Session #1_
 
 ## Project
 
@@ -9,90 +9,76 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 
 ## Architecture & Tech Stack
 
-- Monorepo: pnpm + (later) Turborepo; apps/mobile, packages/shared
-- App: Expo SDK 58 + Expo Router + TypeScript (src/app/), NativeWind v4 + Tailwind ^3.4.17
-- State: Zustand 5 (theme store in src/theme/)
-- Theming: NativeWind darkMode "class"; accent via CSS variable --accent (vars() in ThemeRoot), Tailwind color "accent". Do NOT use bg-accent inside react-native Modal on web: sheets are absolute overlays
-- Theme persistence: theme-store.ts saves theme_mode and theme_accent in the settings table; hydrate() runs in ThemeRoot, which renders nothing until hydrated
-- On web, "system" theme is resolved manually via matchMedia in theme-root.tsx
-- Tabs: native app-tabs.tsx (NativeTabs: Expenses, Insights, Reports, Settings; Insights and Reports reuse explore.png icon, real icons still to add) and web app-tabs.web.tsx (custom pill header, NativeNind-styled, same four tabs). Routes: index, insights, reports, explore (= Settings)
-- Shared package: @etrak/shared (Zod: currency, category, expense). category name max 40, emoji max 8
+- Monorepo: pnpm; apps/mobile, packages/shared
+- App: Expo SDK 58 + Expo Router + TypeScript (src/app/), NativeWind v4 + Tailwind ^3.4.17, Zustand 5
+- Theming: NativeWind darkMode "class"; accent via CSS variable --accent; theme_mode/theme_accent persisted in settings table (theme-store hydrate); web "system" mode resolved via matchMedia in theme-root.tsx. Do NOT use bg-accent inside react-native Modal on web: sheets are absolute overlays
+- Tabs: native app-tabs.tsx (Expenses, Insights, Reports, Settings; extra tabs reuse explore.png icon) and web app-tabs.web.tsx (custom pill header, same four). Routes: index, insights, reports, explore (= Settings)
+- Shared package: @etrak/shared (Zod: currency, category, expense)
 - Data layer (apps/mobile/src/db): expo-sqlite async API, plain SQL (NO Drizzle), Zod validation
-  - migrations.ts (PRAGMA user_version; tables categories, expenses, settings), client.ts (getDb singleton, newId, getDeviceId)
+  - migrations.ts, client.ts (getDb, newId, getDeviceId)
   - categories-repo.ts: listCategories(includeDeleted), createCategory, updateCategory, softDeleteCategory, ensureDefaultCategories
-  - expenses-repo.ts: createExpense, listExpenses, listExpensesInRange(startMs, endMs), updateExpense(id, {amountMinor, currency, categoryId, note, spentAt?}), softDeleteExpense
-  - settings-repo.ts keys: device_id, last_currency, main_currency, theme_mode, theme_accent
-- UI (apps/mobile/src):
-  - app/index.tsx: expense list for a month, month navigation, per-currency totals card, + button
-  - components/expense-sheet.tsx: add/edit (amount, currency, category, date with Today/Yesterday chips and YYYY-MM-DD, no future dates, note, two-tap delete)
-  - components/category-manager.tsx (+ lib/emojis.ts), main-currency.tsx, db-error-banner.tsx (friendly "another tab" / invalid VFS state message)
-  - app/insights.tsx: category donut + 6-month bars, per-currency chips; components/donut-chart.tsx and bar-chart.tsx use react-native-svg (donut rotation via transform string, not rotation/origin props)
-  - app/reports.tsx + lib/report-html.ts: three styles (summary, detailed, by category), one section per currency. Web: hidden iframe + print dialog (Save as PDF). Native: expo-print printToFileAsync + expo-sharing
-  - app/explore.tsx: Settings (ThemePanel, MainCurrency, CategoryManager)
-- Helpers: lib/currencies.ts, money.ts (parseAmountToMinor, formatMinor), emojis.ts, dates.ts (toDateInput, dayOffset, dateInputToMs, monthRange, monthLabel)
-- SQLite on web: OPFS; metro.config.js has NativeWind + wasm + COEP credentialless / COOP same-origin headers
-- Planned: Reanimated, FlashList; Google Drive appDataFolder backup; Hono + zod-openapi + Swagger API; Google sign-in only in v1; static web output
+  - expenses-repo.ts: createExpense, listExpenses, listExpensesInRange, updateExpense (incl. spentAt), softDeleteExpense, listDeletedExpenses, restoreExpense
+  - settings-repo.ts keys: device_id, last_currency, main_currency, theme_mode, theme_accent, last_sync_at
+  - backup-repo.ts: exportBackup, mergeBackup (newer updated_at wins, soft deletes sync; removes unused duplicate starter categories), eraseLocalData
+- Google sign-in + Drive sync (WEB ONLY for now): lib/google-auth.ts (OAuth implicit flow with same-tab redirect, token in sessionStorage, ~1h expiry, no refresh), lib/google-drive.ts (etrak-backup.json in hidden appDataFolder, scope drive.appdata), components/backup-panel.tsx (Sign in, Sync now = pull+merge then push, Erase data on this device, Sign out), components/recently-deleted.tsx. captureGoogleRedirect() runs in _layout.tsx. Client ID in apps/mobile/.env as EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (gitignored; baked in at build/start time; restart server after editing)
+- UI: index.tsx (month nav, per-currency totals, list grouped by day), expense-sheet.tsx, insights.tsx (react-native-svg donut + 6-month bars), reports.tsx + lib/report-html.ts (3 PDF styles; web = hidden iframe print dialog, native = expo-print + expo-sharing), explore.tsx (Settings: ThemePanel, MainCurrency, CategoryManager, BackupPanel, RecentlyDeleted)
+- Helpers: lib/currencies.ts, money.ts, emojis.ts, dates.ts
+- Production web: `pnpm exec expo export --platform web` then `node scripts/serve-web.mjs` (port 3000, sends COEP credentialless + COOP same-origin)
+- Planned: Reanimated, FlashList; Hono + zod-openapi + Swagger API; Android/iOS Google sign-in (needs dev build, native client IDs); static web hosting
 
 ## Decisions
 
-- Multi-device: per-record change log (timestamp + deviceId), soft deletes, polling sync
-- Multi-currency: each expense stores currency + rateToMain (1 for now). Totals, charts and reports are per currency until exchange rates exist
-- Money as integer minor units; timestamps as epoch ms
-- No backup password lock in v1
+- Multi-device: per-record updated_at + deviceId, soft deletes; last write wins. A delete is a normal change and syncs (deleting while signed out then syncing overwrites the Drive copy). Use "Erase data on this device" to test restore, not manual deletes
+- Multi-currency: totals, charts, reports are per currency until exchange rates exist
+- Money as integer minor units; timestamps epoch ms
+- Backups live in each user's own Google Drive appDataFolder (no storage for us); Google sign-in only in v1 (no phone login)
+- Hosting plan: Cloudflare Pages (free), static `dist` with a `_headers` file sending COEP credentialless + COOP same-origin (GitHub Pages cannot send custom headers). Add the hosted https address to the Google OAuth client origins and redirect URIs, then publish the consent screen so other users can sign in
 - Distribution: GitHub releases (Android APK) + PWA for iOS testing; store release later
-- Performance: 60 fps web, 60/120Hz mobile; measure on a production build, not the dev server
-- Charts: react-native-svg + plain Views (Victory Native XL skipped: needs Skia/Reanimated/Gesture Handler, wasm on web)
-- Commits: Conventional Commits via Husky + commitlint; SemVer, CHANGELOG later
-- Git workflow: main = stable releases; develop = integration; feat/* merged locally with `git merge --no-ff`. Run `git branch --show-current` before each commit
-- Web hosting must send COEP credentialless + COOP same-origin
+- Charts: react-native-svg + plain Views
+- Commits: Conventional Commits (Husky + commitlint). Git: main = stable, develop = integration, feat/* merged with `git merge --no-ff`. Run `git branch --show-current` before each commit
 - Web limitation: only ONE browser tab can open the database at a time
 
 ## Known issues
 
-- Web "system" theme did not follow the browser's dark setting for the user (matchMedia fix added, unconfirmed). Check in console: matchMedia('(prefers-color-scheme: dark)').matches
-- Dev server only: "Invalid VFS state" after hot reload or new dependency. Fix: close all localhost:8081 tabs, pkill -f chrome, wipe localhost:8081 at chrome://settings/content/all, reopen in ONE tab. Avoid by pressing F5 after pasting files
-- Git history: dashboard commits landed directly on develop (feat/dashboard branch has only the month filter). Harmless, not rewritten
-- Native PDF share flow and native tabs not yet tested on a phone
-- Bar chart shows no amounts; Insights/Reports tabs reuse the Settings icon
+- Drive restore round trip (Sync, Erase, Sync) not yet confirmed by the user
+- Web "system" theme did not follow the browser's dark setting for the user (matchMedia fix unconfirmed)
+- Dev server only: "Invalid VFS state" after hot reload or new dependency. Fix: close all localhost:8081 tabs, pkill -f chrome, wipe localhost:8081 at chrome://settings/content/all, reopen in ONE tab; press F5 after pasting files
+- Google sign-in in Testing mode: only listed test users; sign-in expires after ~1h; fresh browsers may show duplicate starter categories until synced (merge cleans unused duplicates)
+- Native tabs, PDF share flow and Android/iOS sign-in untested on a phone
+- Git history: some commits landed on develop directly; harmless
 
 ## Environment notes
 
-- pnpm installed with `sudo npm install -g pnpm` (no corepack)
-- Do NOT run `pnpm dlx tailwindcss init` (pulls Tailwind 4)
-- Start the app: `cd apps/mobile && pnpm start`, press w (or open http://localhost:8081). `pnpm exec expo start --clear` ONLY after changing config files
+- pnpm via `sudo npm install -g pnpm` (no corepack); do NOT run `pnpm dlx tailwindcss init`
+- Start: `cd apps/mobile && pnpm start`, press w (open http://localhost:8081, NOT 127.0.0.1)
 - ALWAYS run git commands and `cat > apps/mobile/...` blocks from the project root (prompt ends in ...Project1$)
-- Use two terminals: one at the root, one in apps/mobile (server). Paste with Ctrl+Shift+V
-- Git push over HTTPS needs a GitHub personal access token; `git config --global credential.helper store` saves it
-- After installing a dependency: stop server, close all localhost tabs, restart, open ONE tab
-- Reload in the BROWSER tab with F5 (F5 in VS Code starts the debugger)
+- Two terminals: root (git, file blocks) and apps/mobile (server). Paste with Ctrl+Shift+V
+- Git push over HTTPS needs a GitHub personal access token; `git config --global credential.helper store`
+- After installing a dependency or editing .env: stop server, close all localhost tabs, restart, open ONE tab
+- Reload in the BROWSER tab with F5
 - Nothing edits project files automatically: every change is a terminal block or manual edit
 
 ## Git
 
-- Merged into develop: everything up to feat/pdf-report
-- Current branch: feat/production-build
+- Merged into develop: everything up to feat/google-backup
+- Current branch: feat/hosting
 
 ## Completed
 
-- [x] Monorepo, commitlint, husky, GitHub remote
-- [x] Expo app, NativeWind, theme system with persistence
-- [x] Shared schemas, SQLite data layer on web
-- [x] Expense entry, edit, delete, date editing, list
-- [x] Categories with emoji picker, main currency, tab-lock banner
-- [x] Web header (Expenses, Insights, Reports, Settings)
-- [x] Month filter and totals
-- [x] Insights: category donut and 6-month trend
-- [x] PDF reports (3 styles)
+- [x] Monorepo, theme system with persistence, shared schemas, SQLite data layer
+- [x] Expense entry/edit/delete/date, categories with emoji, main currency, tab-lock banner
+- [x] Web header, month filter and totals, day grouping
+- [x] Insights charts, PDF reports, production web build server
+- [x] Google sign-in + Drive sync (web), Recently deleted, Erase local data
 
 ## In Progress
 
-- [ ] feat/production-build: `expo export --platform web`, local static server with COEP/COOP headers (apps/mobile/scripts/serve-web.mjs), 60 fps check
+- [ ] feat/hosting: public/_headers, Cloudflare Pages deploy, add hosted URL to Google client
 
 ## Exact Next Steps
 
-1. Production build and 60 fps measurement; fix anything slow (FlashList, memoized rows)
-2. Group list by day; real tab icons; bar chart amounts
-3. Test on Android (Expo Go or dev build): native tabs, PDF share, haptics
-4. Google sign-in + Drive appDataFolder backup/sync (requirements #9)
-5. Hono API + Swagger UI (requirement #8); free hosting
-6. Exchange rates for cross-currency totals; CHANGELOG and v0.1.0 release
+1. Deploy to Cloudflare Pages; add hosted URL to Google OAuth client; test sign-in on the hosted site
+2. Hono API + Swagger UI (requirement #8)
+3. Publish OAuth consent screen (check drive.appdata verification needs)
+4. Android/iOS: dev build, native Google client IDs, test tabs, PDF share, haptics
+5. Real tab icons, bar chart amounts, exchange rates, FlashList, CHANGELOG, v0.1.0
