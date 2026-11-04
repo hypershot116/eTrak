@@ -11,26 +11,44 @@ import {
   View,
 } from 'react-native';
 
+import { CalendarPopup } from '@/components/calendar-popup';
+import { CalendarIcon } from '@/components/icons';
 import { createExpense, softDeleteExpense, updateExpense } from '@/db/expenses-repo';
 import { getSetting, setSetting } from '@/db/settings-repo';
 import { currencies, getCurrency } from '@/lib/currencies';
-import { dateInputToMs, dayOffset, toDateInput } from '@/lib/dates';
+import {
+  dateInputToMs,
+  dayOffset,
+  relativeDayTag,
+  shortDateLabel,
+  toDateInput,
+  weekdayName,
+} from '@/lib/dates';
 import { parseAmountToMinor } from '@/lib/money';
 
 type Props = {
   visible: boolean;
   categories: Category[];
   expense: Expense | null; // null = new expense, otherwise edit this one
+  initialDate?: string; // YYYY-MM-DD, used for new expenses (the day being viewed)
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedDate: string | null) => void; // null when the expense was deleted
 };
 
-export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }: Props) {
+export function ExpenseSheet({
+  visible,
+  categories,
+  expense,
+  initialDate,
+  onClose,
+  onSaved,
+}: Props) {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [dateText, setDateText] = useState(dayOffset(0));
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -41,6 +59,7 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
     if (!visible) return;
     setError(null);
     setConfirmDelete(false);
+    setCalendarOpen(false);
     if (expense) {
       const digits = getCurrency(expense.currency).digits;
       setAmount((expense.amountMinor / 10 ** digits).toFixed(digits));
@@ -52,7 +71,7 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
     }
     setAmount('');
     setNote('');
-    setDateText(dayOffset(0));
+    setDateText(initialDate ?? dayOffset(0));
     setCategoryId((prev) => prev ?? categories[0]?.id ?? null);
     getSetting('last_currency').then(async (c) => {
       const preferred = c ?? (await getSetting('main_currency'));
@@ -64,8 +83,9 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
   if (!visible) return null;
 
   const cur = getCurrency(currency);
-  const today = dayOffset(0);
   const yesterday = dayOffset(-1);
+  const today = dayOffset(0);
+  const tomorrow = dayOffset(1);
 
   const save = async () => {
     const minor = parseAmountToMinor(amount, cur.digits);
@@ -82,18 +102,14 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       return;
     }
 
-    // Date: keep the original timestamp if the date wasn't changed.
+    // Date: keep the original timestamp if the date wasn't changed. Any date is allowed, including the future.
     let spentAt: number;
-    if (expense && dateText.trim() === toDateInput(expense.spentAt)) {
+    if (expense && dateText === toDateInput(expense.spentAt)) {
       spentAt = expense.spentAt;
     } else {
       const ms = dateInputToMs(dateText, expense ? expense.spentAt : Date.now());
       if (ms === null) {
-        setError('Enter the date as YYYY-MM-DD, for example 2026-11-01');
-        return;
-      }
-      if (dateText.trim() > today) {
-        setError("The date can't be in the future");
+        setError('Choose a valid date');
         return;
       }
       spentAt = ms;
@@ -122,7 +138,7 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       try {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
-      onSaved();
+      onSaved(toDateInput(spentAt));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -142,7 +158,7 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
       try {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } catch {}
-      onSaved();
+      onSaved(null);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -166,6 +182,36 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
             </Text>
             <Pressable onPress={onClose}>
               <Text className="text-xl text-zinc-500">✕</Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={() => setCalendarOpen(true)}
+            className="flex-row items-center gap-3 rounded-2xl border border-zinc-300 px-4 py-3 active:opacity-70 dark:border-zinc-700"
+          >
+            <CalendarIcon size={26} />
+            <View className="flex-1">
+              <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
+                {weekdayName(dateText)}
+              </Text>
+              <Text className="text-xl font-bold text-zinc-900 dark:text-white">
+                {shortDateLabel(dateText)}
+              </Text>
+            </View>
+            <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+              {relativeDayTag(dateText)}
+            </Text>
+          </Pressable>
+
+          <View className="flex-row gap-2">
+            <Pressable onPress={() => setDateText(yesterday)} className={chip(dateText === yesterday)}>
+              <Text className={chipText(dateText === yesterday)}>Yesterday</Text>
+            </Pressable>
+            <Pressable onPress={() => setDateText(today)} className={chip(dateText === today)}>
+              <Text className={chipText(dateText === today)}>Today</Text>
+            </Pressable>
+            <Pressable onPress={() => setDateText(tomorrow)} className={chip(dateText === tomorrow)}>
+              <Text className={chipText(dateText === tomorrow)}>Tomorrow</Text>
             </Pressable>
           </View>
 
@@ -211,26 +257,6 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
             ))}
           </View>
 
-          <View className="flex-row items-center gap-2">
-            <Pressable onPress={() => setDateText(today)} className={chip(dateText === today)}>
-              <Text className={chipText(dateText === today)}>Today</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setDateText(yesterday)}
-              className={chip(dateText === yesterday)}
-            >
-              <Text className={chipText(dateText === yesterday)}>Yesterday</Text>
-            </Pressable>
-            <TextInput
-              value={dateText}
-              onChangeText={setDateText}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#a1a1aa"
-              maxLength={10}
-              className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-1.5 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
-            />
-          </View>
-
           <TextInput
             value={note}
             onChangeText={setNote}
@@ -272,6 +298,13 @@ export function ExpenseSheet({ visible, categories, expense, onClose, onSaved }:
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <CalendarPopup
+        visible={calendarOpen}
+        value={dateText}
+        onSelect={(d) => setDateText(d)}
+        onClose={() => setCalendarOpen(false)}
+      />
     </View>
   );
 }
