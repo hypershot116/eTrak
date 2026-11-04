@@ -1,3 +1,4 @@
+import { categoryEmoji } from '@/lib/category-display';
 import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
@@ -193,7 +194,7 @@ export default function HomeScreen() {
                 onPress={() => openEdit(e)}
                 className="flex-row items-center gap-3 border-b border-zinc-200 py-3 active:opacity-60 dark:border-zinc-800"
               >
-                <Text className="text-2xl">{cat?.emoji ?? '❓'}</Text>
+                <Text className="text-2xl">{categoryEmoji(cat)}</Text>
                 <View className="flex-1">
                   <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
                     {cat?.name ?? 'Unknown'}
@@ -223,6 +224,7 @@ export default function HomeScreen() {
         categories={categories}
         expense={editing}
         initialDate={day}
+        onCategoriesChanged={refresh}
         onClose={() => setSheetOpen(false)}
         onSaved={(savedDate) => {
           setSheetOpen(false);

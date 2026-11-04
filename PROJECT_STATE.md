@@ -28,8 +28,8 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 
 ## Requested changes (Session #2 backlog, build in this order, one step at a time)
 
-1. Day navigation + date UX [IMPLEMENTED, awaiting user test]: day swipe (left = previous day), prominent styled date title with weekday, calendar icon + popup, future-dated expenses allowed. Test checklist: day header, swipe/drag/arrows, calendar jump, sheet date block, save jumps to saved date, future expense shows "Planned", edit date moves expense, dark mode
-2. Instant categories [PARTLY DONE: CategoryManager in Settings]. To do: create a category inside the entry sheet; emoji optional (change @etrak/shared category schema emoji min(1) to optional/empty string, CategoryManager validation, display fallback when emoji is empty). Files needed from user: category-manager.tsx, emojis.ts, categories-repo.ts, packages/shared/src/category.ts
+1. Day navigation + date UX [IMPLEMENTED; user said Next without reporting problems, assumed passed; merge commands given]: day swipe (left = previous day), prominent styled date title with weekday, calendar icon + popup, future-dated expenses allowed
+2. Instant categories [IN PROGRESS, waiting for ~/Desktop/etrak-step2.txt]. Plan: "+ New category" chip in the entry sheet opening an inline form (name, optional emoji), new category auto-selected; emoji optional everywhere (change @etrak/shared category schema emoji min(1) to allow empty, CategoryManager validation and its emoji picker, display fallback dot wherever emoji is empty: home list, insights, reports, recently deleted); old data and Drive backups stay valid
 3. Sync behaviour [PARTLY DONE: sign-in, manual Sync now, sign out]. To do: signed out = local only; signed in = automatic sync after every change (debounced); signing out keeps data visible locally but stops syncing; add "Delete cloud backup" (Drive files.delete on etrak-backup.json), after which auto-sync pauses until the user presses Sync now; first-sync message when data is restored from Google (counts of restored expenses/categories). Files needed: backup-panel.tsx, google-drive.ts, google-auth.ts, backup-repo.ts
 4. Welcome screen [TO DO]: short description ("an easy way to track your expenses"), then animated transition into the expense screen; shown on first launch (setting key welcome_seen). Files needed: app-tabs.tsx, app-tabs.web.tsx
 5. Futuristic look [TO DO, LAST]: futuristic logo/outline shapes and graphics throughout; accent color setting changes TEXT colors only (not buttons, borders, chips, backgrounds). Currently bg-accent / border-accent are used in chips, buttons, FAB, calendar selection: all must be restyled in this step
@@ -41,6 +41,7 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - Money as integer minor units; timestamps epoch ms
 - Future-dated expenses are allowed and count in month totals, Insights and Reports
 - Swipe direction: left swipe = previous day, right swipe = next day (user's choice; flip in index.tsx PanResponder release handler if wanted)
+- Category emoji becomes optional (user request); empty emoji displays as a neutral dot
 - Backups live in each user's own Google Drive appDataFolder (no storage for us); Google sign-in only in v1 (no phone login)
 - NO store release. Distribution plan: GitHub repository with full instructions (how to get the code and run it on any PC, requirements, setup), a version history (CHANGELOG.md: what each version introduced, SemVer starting v0.1.0), Android APK shared by Google Drive link
 - iOS: an iPhone app cannot be installed from a Drive link without a paid Apple Developer account (signing). Free options: web version added to home screen (PWA), or the user builds it in Xcode on a Mac with a free Apple ID (expires every 7 days). Document this honestly in the GitHub instructions
@@ -73,8 +74,8 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 
 ## Git
 
-- Merged into develop: everything up to feat/google-backup, plus feat/hosting (public/_headers) once Step 0 is run
-- Current branch: feat/day-navigation (backlog item 1 files created, not yet committed)
+- Merged into develop: everything up to feat/google-backup, plus feat/hosting (public/_headers) and feat/day-navigation (commands given, pending user confirmation)
+- Current branch: feat/instant-categories (new, no changes yet)
 
 ## Completed
 
@@ -83,16 +84,17 @@ GitHub: github.com/hypershot116/eTrak (public). Local folder: ~/Desktop/Project/
 - [x] Web header, month filter and totals, day grouping
 - [x] Insights charts, PDF reports, production web build server
 - [x] Google sign-in + Drive sync (web), Recently deleted, Erase local data
-- [x] Backlog item 1 code delivered (dates.ts, icons.tsx, calendar-popup.tsx, expense-sheet.tsx, index.tsx)
+- [x] Backlog item 1: day view, swipe, calendar popup, styled date title, future dates
 
 ## In Progress
 
-- [ ] User tests backlog item 1 (8 checks), then commits and pushes feat/day-navigation
+- [ ] Run the merge commands (Step 1) and create feat/instant-categories
+- [ ] Backlog item 2: waiting for ~/Desktop/etrak-step2.txt (category-manager.tsx, emojis.ts, categories-repo.ts, shared category.ts, emoji usage list)
 
 ## Exact Next Steps
 
-1. User reports which of the 8 checks pass; commit and push feat/day-navigation; merge into develop
-2. Backlog item 2 (instant categories, optional emoji): user sends category-manager.tsx, emojis.ts, categories-repo.ts, packages/shared/src/category.ts
+1. User runs Step 1 git commands and attaches etrak-step2.txt
+2. Implement backlog item 2; user tests; commit and merge
 3. Backlog items 3, 4, 5 in order (one branch each, user tests before the next)
 4. Then: README with full setup instructions, CHANGELOG.md with version history (v0.1.0), Android APK via Google Drive link, iOS note
 5. Then free cloud hosting (Cloudflare Pages), Hono API + Swagger UI (requirement #8), Android/iOS Google sign-in, real tab icons, exchange rates, FlashList

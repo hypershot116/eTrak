@@ -1,3 +1,4 @@
+import { categoryEmoji } from './category-display';
 import type { Category, Expense } from '@etrak/shared';
 
 import { formatMinor } from './money';
@@ -46,7 +47,7 @@ export function buildReportHtml({ style, monthTitle, expenses, categories, accen
 
   const catLabel = (id: string) => {
     const c = categories.get(id);
-    return `${esc(c?.emoji ?? '❓')} ${esc(c?.name ?? 'Unknown')}`;
+    return `${esc(categoryEmoji(c))} ${esc(c?.name ?? 'Unknown')}`;
   };
 
   const sections = [...byCurrency.entries()]

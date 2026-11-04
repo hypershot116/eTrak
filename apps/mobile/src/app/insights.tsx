@@ -1,3 +1,4 @@
+import { categoryEmoji } from '@/lib/category-display';
 import type { Category, Expense } from '@etrak/shared';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -79,7 +80,7 @@ export default function InsightsScreen() {
         value,
         color: palette[i % palette.length],
         name: categoryById.get(id)?.name ?? 'Unknown',
-        emoji: categoryById.get(id)?.emoji ?? '❓',
+        emoji: categoryEmoji(categoryById.get(id)),
       }));
   }, [inMonth, currency, categoryById]);
 
