@@ -1,6 +1,7 @@
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackupPanel } from '@/components/backup-panel';
 import { CategoryManager } from '@/components/category-manager';
 import { MainCurrency } from '@/components/main-currency';
 import { ThemePanel } from '@/theme/theme-panel';
@@ -14,6 +15,7 @@ export default function SettingsScreen() {
           <ThemePanel />
           <MainCurrency />
           <CategoryManager />
+          <BackupPanel />
         </View>
       </ScrollView>
     </SafeAreaView>
