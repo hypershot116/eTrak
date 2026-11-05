@@ -3,6 +3,8 @@ import Svg, { Circle, G } from 'react-native-svg';
 
 export type Slice = { value: number; color: string };
 
+const GLOW = 12; // extra stroke width for the soft glow behind each slice
+
 export function DonutChart({
   slices,
   size = 180,
@@ -17,7 +19,7 @@ export function DonutChart({
   centerBottom?: string;
 }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
-  const r = (size - stroke) / 2;
+  const r = (size - stroke - GLOW) / 2;
   const c = 2 * Math.PI * r;
   let acc = 0;
 
@@ -37,17 +39,29 @@ export function DonutChart({
             ? slices.map((s, i) => {
                 const len = (s.value / total) * c;
                 const el = (
-                  <Circle
-                    key={i}
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={r}
-                    stroke={s.color}
-                    strokeWidth={stroke}
-                    fill="none"
-                    strokeDasharray={`${len} ${c - len}`}
-                    strokeDashoffset={-acc}
-                  />
+                  <G key={i}>
+                    <Circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={r}
+                      stroke={s.color}
+                      strokeOpacity={0.16}
+                      strokeWidth={stroke + GLOW}
+                      fill="none"
+                      strokeDasharray={`${len} ${c - len}`}
+                      strokeDashoffset={-acc}
+                    />
+                    <Circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={r}
+                      stroke={s.color}
+                      strokeWidth={stroke}
+                      fill="none"
+                      strokeDasharray={`${len} ${c - len}`}
+                      strokeDashoffset={-acc}
+                    />
+                  </G>
                 );
                 acc += len;
                 return el;

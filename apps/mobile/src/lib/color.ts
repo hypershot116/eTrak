@@ -156,3 +156,12 @@ export function deriveSurfaces(accentHex: string, style: SurfaceStyle): Record<s
   });
   return out;
 }
+
+// Distinct colors for chart slices, starting at the accent and walking around the color wheel.
+export function categoryPalette(accentHex: string, count = 8): string[] {
+  const a = hexToHsl(normalizeHex(accentHex) ?? DEFAULT_ACCENT);
+  const s = clamp(a.s, 0.55, 0.9);
+  return Array.from({ length: count }, (_, i) =>
+    hslToHex({ h: a.h + i * 45, s, l: i === 0 ? clamp(a.l, 0.5, 0.65) : 0.58 })
+  );
+}
