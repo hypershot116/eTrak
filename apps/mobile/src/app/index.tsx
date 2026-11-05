@@ -9,6 +9,7 @@ import { CalendarPopup } from '@/components/calendar-popup';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { CalendarIcon } from '@/components/icons';
+import { Logo } from '@/components/logo';
 import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
@@ -25,6 +26,7 @@ import {
   weekdayName,
 } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
+import { useAccent } from '@/lib/use-accent';
 import { useSyncState } from '@/lib/sync-engine';
 
 // Totals per currency (no conversion until exchange rates are added).
@@ -50,6 +52,7 @@ export default function HomeScreen() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sync = useSyncState();
+  const a = useAccent();
 
   const today = dayOffset(0);
   const { y, m } = parseDateParts(day);
@@ -139,7 +142,10 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1">
       <View className="w-full max-w-2xl flex-1 self-center px-5" {...pan.panHandlers}>
         <View className="flex-row items-center justify-between py-4">
-          <Text className="text-3xl font-bold text-accent">eTrak</Text>
+          <View className="flex-row items-center gap-2">
+            <Logo size={36} color={a.accent} />
+            <Text className="text-3xl font-bold text-accent">eTrak</Text>
+          </View>
           <View className="flex-row items-center gap-2">
             {day !== today ? (
               <Pressable
@@ -178,7 +184,10 @@ export default function HomeScreen() {
         </View>
 
         {dayTotals.length > 0 ? (
-          <View className="mb-2 gap-1 rounded-2xl bg-zinc-100 p-4 dark:bg-zinc-900">
+          <View
+            className="mb-2 gap-1 rounded-2xl border bg-zinc-100 p-4 dark:bg-zinc-900"
+            style={{ borderColor: a.tint(0.35), boxShadow: `0 0 18px ${a.tint(0.18)}` }}
+          >
             <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
               {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
               {dayExpenses.length === 1 ? 'expense' : 'expenses'}
@@ -237,8 +246,9 @@ export default function HomeScreen() {
       <Pressable
         onPress={openNew}
         className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-accent"
+        style={{ boxShadow: `0 0 20px ${a.glow}` }}
       >
-        <Text className="text-3xl text-white">+</Text>
+        <Text className="text-3xl text-on-accent">+</Text>
       </Pressable>
 
       <ExpenseSheet
