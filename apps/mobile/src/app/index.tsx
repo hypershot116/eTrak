@@ -1,7 +1,7 @@
 import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, PanResponder, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,8 +9,12 @@ import { CalendarPopup } from '@/components/calendar-popup';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { CalendarIcon } from '@/components/icons';
+import { GradientRing } from '@/components/gradient-ring';
+import { Logo } from '@/components/logo';
+import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
+import { categoryEmoji } from '@/lib/category-display';
 import {
   addDays,
   dayOffset,
@@ -23,6 +27,8 @@ import {
   weekdayName,
 } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
+import { useAccent } from '@/lib/use-accent';
+import { useSyncState } from '@/lib/sync-engine';
 
 // Totals per currency (no conversion until exchange rates are added).
 function sumByCurrency(list: Expense[]): [string, number][] {
@@ -46,6 +52,8 @@ export default function HomeScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sync = useSyncState();
+  const a = useAccent();
 
   const today = dayOffset(0);
   const { y, m } = parseDateParts(day);
@@ -69,6 +77,11 @@ export default function HomeScreen() {
       refresh();
     }, [refresh])
   );
+
+  // Reload when a sync brought in changes from Google Drive.
+  useEffect(() => {
+    if (sync.dataVersion > 0) refresh();
+  }, [sync.dataVersion, refresh]);
 
   const stepDay = useCallback((delta: number) => {
     setDay((prev) => addDays(prev, delta));
@@ -101,6 +114,14 @@ export default function HomeScreen() {
   const dayTotals = useMemo(() => sumByCurrency(dayExpenses), [dayExpenses]);
   const monthTotals = useMemo(() => sumByCurrency(monthExpenses), [monthExpenses]);
 
+  // The biggest currency of the day as a share of the same currency's month total (for the ring).
+  const share = useMemo(() => {
+    const first = dayTotals[0];
+    if (!first) return 0;
+    const month = monthTotals.find(([c]) => c === first[0])?.[1] ?? 0;
+    return month > 0 ? Math.min(1, first[1] / month) : 0;
+  }, [dayTotals, monthTotals]);
+
   const openNew = () => {
     setEditing(null);
     setSheetOpen(true);
@@ -111,6 +132,18 @@ export default function HomeScreen() {
     setSheetOpen(true);
   };
 
+  const syncLabel = sync.syncing
+    ? 'Syncing...'
+    : sync.signedIn
+      ? sync.error
+        ? 'Could not sync. Will try again.'
+        : sync.paused
+          ? 'Cloud sync paused'
+          : 'Synced to Google Drive'
+      : sync.error
+        ? 'Google sign-in expired. Open Settings to sign in again.'
+        : 'Saved on this device only';
+
   const arrow =
     'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 active:opacity-60 dark:bg-zinc-800';
 
@@ -118,7 +151,10 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1">
       <View className="w-full max-w-2xl flex-1 self-center px-5" {...pan.panHandlers}>
         <View className="flex-row items-center justify-between py-4">
-          <Text className="text-3xl font-bold text-accent">eTrak</Text>
+          <View className="flex-row items-center gap-2">
+            <Logo size={36} color={a.accent} />
+            <Text className="text-3xl font-bold text-accent">eTrak</Text>
+          </View>
           <View className="flex-row items-center gap-2">
             {day !== today ? (
               <Pressable
@@ -133,8 +169,10 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
+        <Text className="-mt-3 pb-3 text-xs text-zinc-500 dark:text-zinc-400">{syncLabel}</Text>
 
         <DbErrorBanner error={error} />
+        <SyncBanner />
 
         <View className="mb-3 flex-row items-center justify-between">
           <Pressable onPress={() => stepDay(-1)} className={arrow}>
@@ -155,16 +193,27 @@ export default function HomeScreen() {
         </View>
 
         {dayTotals.length > 0 ? (
-          <View className="mb-2 gap-1 rounded-2xl bg-zinc-100 p-4 dark:bg-zinc-900">
-            <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-              {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
-              {dayExpenses.length === 1 ? 'expense' : 'expenses'}
-            </Text>
-            {dayTotals.map(([code, minor]) => (
-              <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
-                {formatMinor(minor, code)}
+          <View
+            className="mb-2 flex-row items-center gap-4 rounded-2xl border bg-zinc-100 p-4 dark:bg-zinc-900"
+            style={{ borderColor: a.tint(0.35), boxShadow: `0 0 18px ${a.tint(0.18)}` }}
+          >
+            <GradientRing progress={share} size={112} stroke={10}>
+              <Text className="text-lg font-bold text-zinc-900 dark:text-white">
+                {Math.round(share * 100)}%
               </Text>
-            ))}
+              <Text className="text-[10px] text-zinc-500 dark:text-zinc-400">of month</Text>
+            </GradientRing>
+            <View className="flex-1 gap-1">
+              <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
+                {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
+                {dayExpenses.length === 1 ? 'expense' : 'expenses'}
+              </Text>
+              {dayTotals.map(([code, minor]) => (
+                <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
+                  {formatMinor(minor, code)}
+                </Text>
+              ))}
+            </View>
           </View>
         ) : null}
 
@@ -193,7 +242,7 @@ export default function HomeScreen() {
                 onPress={() => openEdit(e)}
                 className="flex-row items-center gap-3 border-b border-zinc-200 py-3 active:opacity-60 dark:border-zinc-800"
               >
-                <Text className="text-2xl">{cat?.emoji ?? '❓'}</Text>
+                <Text className="text-2xl">{categoryEmoji(cat)}</Text>
                 <View className="flex-1">
                   <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
                     {cat?.name ?? 'Unknown'}
@@ -214,8 +263,9 @@ export default function HomeScreen() {
       <Pressable
         onPress={openNew}
         className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-accent"
+        style={{ boxShadow: `0 0 20px ${a.glow}` }}
       >
-        <Text className="text-3xl text-white">+</Text>
+        <Text className="text-3xl text-on-accent">+</Text>
       </Pressable>
 
       <ExpenseSheet
@@ -223,6 +273,7 @@ export default function HomeScreen() {
         categories={categories}
         expense={editing}
         initialDate={day}
+        onCategoriesChanged={refresh}
         onClose={() => setSheetOpen(false)}
         onSaved={(savedDate) => {
           setSheetOpen(false);

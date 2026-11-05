@@ -1,3 +1,4 @@
+import { categoryEmoji } from '@/lib/category-display';
 import type { Category, Expense } from '@etrak/shared';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -10,12 +11,9 @@ import { DonutChart } from '@/components/donut-chart';
 import { listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
 import { monthLabel, monthRange } from '@/lib/dates';
+import { categoryPalette } from '@/lib/color';
 import { formatMinor } from '@/lib/money';
-
-const palette = [
-  '#6366f1', '#10b981', '#f43f5e', '#f59e0b',
-  '#0ea5e9', '#a855f7', '#14b8a6', '#ec4899',
-];
+import { useAccent } from '@/lib/use-accent';
 
 export default function InsightsScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -26,6 +24,9 @@ export default function InsightsScreen() {
   });
   const [picked, setPicked] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const a = useAccent();
+  const palette = useMemo(() => categoryPalette(a.accent, 8), [a.accent]);
+  const cardStyle = { borderColor: a.tint(0.3), boxShadow: `0 0 18px ${a.tint(0.14)}` };
 
   const now = new Date();
   const isCurrentMonth = month.y === now.getFullYear() && month.m === now.getMonth();
@@ -79,9 +80,9 @@ export default function InsightsScreen() {
         value,
         color: palette[i % palette.length],
         name: categoryById.get(id)?.name ?? 'Unknown',
-        emoji: categoryById.get(id)?.emoji ?? '❓',
+        emoji: categoryEmoji(categoryById.get(id)),
       }));
-  }, [inMonth, currency, categoryById]);
+  }, [inMonth, currency, categoryById, palette]);
 
   const monthTotal = slices.reduce((s, x) => s + x.value, 0);
 
@@ -149,7 +150,7 @@ export default function InsightsScreen() {
                     currency === code ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
                   }`}
                 >
-                  <Text className={currency === code ? 'text-white' : 'text-zinc-800 dark:text-zinc-200'}>
+                  <Text className={currency === code ? 'text-on-accent' : 'text-zinc-800 dark:text-zinc-200'}>
                     {code}
                   </Text>
                 </Pressable>
@@ -159,7 +160,10 @@ export default function InsightsScreen() {
 
           {currency && slices.length > 0 ? (
             <>
-              <View className="gap-4 rounded-2xl bg-zinc-100 p-5 dark:bg-zinc-900">
+              <View
+                className="gap-4 rounded-2xl border bg-zinc-100 p-5 dark:bg-zinc-900"
+                style={cardStyle}
+              >
                 <Text className="font-semibold text-zinc-900 dark:text-white">By category</Text>
                 <View className="items-center">
                   <DonutChart
@@ -186,7 +190,10 @@ export default function InsightsScreen() {
                 </View>
               </View>
 
-              <View className="gap-4 rounded-2xl bg-zinc-100 p-5 dark:bg-zinc-900">
+              <View
+                className="gap-4 rounded-2xl border bg-zinc-100 p-5 dark:bg-zinc-900"
+                style={cardStyle}
+              >
                 <Text className="font-semibold text-zinc-900 dark:text-white">
                   Last 6 months ({currency})
                 </Text>

@@ -54,7 +54,9 @@ export async function exportBackup(): Promise<Backup> {
 }
 
 // Merges a backup into the local database. A record only changes if the incoming one is newer.
-export async function mergeBackup(data: unknown): Promise<{ changed: number; skipped: number }> {
+export async function mergeBackup(
+  data: unknown
+): Promise<{ changed: number; skipped: number; addedExpenses: number; addedCategories: number }> {
   const b = data as Partial<Backup> | null;
   if (!b || b.app !== 'eTrak' || !Array.isArray(b.categories) || !Array.isArray(b.expenses)) {
     throw new Error('The file in Google Drive is not an eTrak backup.');
@@ -62,6 +64,14 @@ export async function mergeBackup(data: unknown): Promise<{ changed: number; ski
   const db = await getDb();
   let changed = 0;
   let skipped = 0;
+  let addedExpenses = 0;
+  let addedCategories = 0;
+  const knownCategoryIds = new Set(
+    (await db.getAllAsync<{ id: string }>('SELECT id FROM categories')).map((r) => r.id)
+  );
+  const knownExpenseIds = new Set(
+    (await db.getAllAsync<{ id: string }>('SELECT id FROM expenses')).map((r) => r.id)
+  );
 
   // A fresh browser creates its own starter categories. Remove the unused ones the backup also has.
   const nowMs = Date.now();
@@ -112,6 +122,7 @@ export async function mergeBackup(data: unknown): Promise<{ changed: number; ski
       c.deviceId
     );
     changed += res.changes;
+    if (res.changes > 0 && c.deletedAt === null && !knownCategoryIds.has(c.id)) addedCategories++;
   }
 
   for (const raw of b.expenses as ExpenseRow[]) {
@@ -158,6 +169,7 @@ export async function mergeBackup(data: unknown): Promise<{ changed: number; ski
       e.deviceId
     );
     changed += res.changes;
+    if (res.changes > 0 && e.deletedAt === null && !knownExpenseIds.has(e.id)) addedExpenses++;
   }
 
   const main = b.settings?.main_currency;
@@ -165,7 +177,7 @@ export async function mergeBackup(data: unknown): Promise<{ changed: number; ski
     await setSetting('main_currency', main);
   }
 
-  return { changed, skipped };
+  return { changed, skipped, addedExpenses, addedCategories };
 }
 
 // Removes expenses and categories from this device only. Google Drive is not touched.

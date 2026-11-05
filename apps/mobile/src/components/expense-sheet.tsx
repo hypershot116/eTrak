@@ -13,8 +13,10 @@ import {
 
 import { CalendarPopup } from '@/components/calendar-popup';
 import { CalendarIcon } from '@/components/icons';
+import { createCategory } from '@/db/categories-repo';
 import { createExpense, softDeleteExpense, updateExpense } from '@/db/expenses-repo';
 import { getSetting, setSetting } from '@/db/settings-repo';
+import { categoryLabel } from '@/lib/category-display';
 import { currencies, getCurrency } from '@/lib/currencies';
 import {
   dateInputToMs,
@@ -24,6 +26,7 @@ import {
   toDateInput,
   weekdayName,
 } from '@/lib/dates';
+import { categoryEmojis } from '@/lib/emojis';
 import { parseAmountToMinor } from '@/lib/money';
 
 type Props = {
@@ -33,6 +36,7 @@ type Props = {
   initialDate?: string; // YYYY-MM-DD, used for new expenses (the day being viewed)
   onClose: () => void;
   onSaved: (savedDate: string | null) => void; // null when the expense was deleted
+  onCategoriesChanged?: () => void; // called after a category is created from the sheet
 };
 
 export function ExpenseSheet({
@@ -42,6 +46,7 @@ export function ExpenseSheet({
   initialDate,
   onClose,
   onSaved,
+  onCategoriesChanged,
 }: Props) {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
@@ -53,13 +58,30 @@ export function ExpenseSheet({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Categories created from inside this sheet (shown at once, before the parent reloads)
+  const [extra, setExtra] = useState<Category[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmoji, setNewEmoji] = useState(''); // empty = no emoji (optional)
+  const [catError, setCatError] = useState<string | null>(null);
+  const [catBusy, setCatBusy] = useState(false);
+
   const isEdit = expense !== null;
+  const allCats = [...categories, ...extra.filter((x) => !categories.some((c) => c.id === x.id))];
+
+  useEffect(() => {
+    if (!visible) setExtra((prev) => (prev.length ? [] : prev));
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
     setError(null);
     setConfirmDelete(false);
     setCalendarOpen(false);
+    setCreating(false);
+    setNewName('');
+    setNewEmoji('');
+    setCatError(null);
     if (expense) {
       const digits = getCurrency(expense.currency).digits;
       setAmount((expense.amountMinor / 10 ** digits).toFixed(digits));
@@ -86,6 +108,37 @@ export function ExpenseSheet({
   const yesterday = dayOffset(-1);
   const today = dayOffset(0);
   const tomorrow = dayOffset(1);
+  const typedName = newName.trim();
+
+  // Creates the category typed in the inline form (or selects the existing one with that name).
+  // Returns the category, or null if it could not be created.
+  const createFromForm = async (): Promise<Category | null> => {
+    if (!typedName) {
+      setCatError('Enter a name');
+      return null;
+    }
+    const existing = allCats.find((c) => c.name.toLowerCase() === typedName.toLowerCase());
+    try {
+      setCatBusy(true);
+      const result = existing ?? (await createCategory(typedName, newEmoji));
+      if (!existing) {
+        setExtra((prev) => [...prev, result]);
+        onCategoriesChanged?.();
+      }
+      setCategoryId(result.id);
+      setCreating(false);
+      setNewName('');
+      setNewEmoji('');
+      setCatError(null);
+      setError(null);
+      return result;
+    } catch (e) {
+      setCatError(String(e));
+      return null;
+    } finally {
+      setCatBusy(false);
+    }
+  };
 
   const save = async () => {
     const minor = parseAmountToMinor(amount, cur.digits);
@@ -97,7 +150,15 @@ export function ExpenseSheet({
       );
       return;
     }
-    if (!categoryId) {
+
+    // If a new category was typed but not added yet, create it now and use it.
+    let chosenCategoryId = categoryId;
+    if (creating && typedName) {
+      const created = await createFromForm();
+      if (!created) return;
+      chosenCategoryId = created.id;
+    }
+    if (!chosenCategoryId) {
       setError('Choose a category');
       return;
     }
@@ -121,7 +182,7 @@ export function ExpenseSheet({
         await updateExpense(expense.id, {
           amountMinor: minor,
           currency,
-          categoryId,
+          categoryId: chosenCategoryId,
           note: note.trim(),
           spentAt,
         });
@@ -129,7 +190,7 @@ export function ExpenseSheet({
         await createExpense({
           amountMinor: minor,
           currency,
-          categoryId,
+          categoryId: chosenCategoryId,
           note: note.trim(),
           spentAt,
         });
@@ -174,8 +235,16 @@ export function ExpenseSheet({
   return (
     <View className="absolute inset-0 z-10 justify-end bg-black/40">
       <Pressable className="flex-1" onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View className="w-full max-w-xl gap-4 self-center rounded-t-3xl bg-white p-5 dark:bg-zinc-900">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ maxHeight: '92%' }}
+      >
+        <ScrollView
+          className="w-full max-w-xl self-center rounded-t-3xl bg-white dark:bg-zinc-900"
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ padding: 20, gap: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="flex-row items-center justify-between">
             <Text className="text-lg font-semibold text-zinc-900 dark:text-white">
               {isEdit ? 'Edit expense' : 'New expense'}
@@ -244,18 +313,77 @@ export function ExpenseSheet({
           </ScrollView>
 
           <View className="flex-row flex-wrap gap-2">
-            {categories.map((c) => (
+            {allCats.map((c) => (
               <Pressable
                 key={c.id}
                 onPress={() => setCategoryId(c.id)}
-                className={chip(categoryId === c.id)}
+                className={chip(categoryId === c.id && !(creating && typedName))}
               >
-                <Text className={chipText(categoryId === c.id)}>
-                  {c.emoji} {c.name}
+                <Text className={chipText(categoryId === c.id && !(creating && typedName))}>
+                  {categoryLabel(c)}
                 </Text>
               </Pressable>
             ))}
+            <Pressable
+              onPress={() => {
+                setCreating((v) => !v);
+                setCatError(null);
+              }}
+              className="rounded-full border border-dashed border-zinc-400 px-3 py-1.5 dark:border-zinc-600"
+            >
+              <Text className="text-accent">{creating ? 'Cancel' : '+ New category'}</Text>
+            </Pressable>
           </View>
+
+          {creating ? (
+            <View className="gap-3 rounded-2xl border border-zinc-300 p-3 dark:border-zinc-700">
+              <View className="flex-row items-center gap-2">
+                <Text className="w-9 text-center text-3xl text-zinc-400">{newEmoji || '•'}</Text>
+                <TextInput
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="New category name"
+                  placeholderTextColor="#a1a1aa"
+                  maxLength={20}
+                  autoFocus
+                  onSubmitEditing={createFromForm}
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
+                />
+                <Pressable
+                  onPress={createFromForm}
+                  disabled={catBusy}
+                  className="rounded-xl bg-accent px-4 py-2"
+                >
+                  <Text className="font-semibold text-white">{catBusy ? '...' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              {typedName ? (
+                <Text className="text-sm text-accent">
+                  This expense will be saved under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
+                  Press Add, or just press Save expense.
+                </Text>
+              ) : null}
+              <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+                Emoji is optional. Tap one to choose it, tap it again to remove it.
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row gap-1.5">
+                  {categoryEmojis.map((e) => (
+                    <Pressable
+                      key={e}
+                      onPress={() => setNewEmoji(newEmoji === e ? '' : e)}
+                      className={`h-10 w-10 items-center justify-center rounded-xl ${
+                        newEmoji === e ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
+                      }`}
+                    >
+                      <Text className="text-xl">{e}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+              {catError ? <Text className="text-sm text-red-500">{catError}</Text> : null}
+            </View>
+          ) : null}
 
           <TextInput
             value={note}
@@ -296,7 +424,7 @@ export function ExpenseSheet({
               </Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <CalendarPopup

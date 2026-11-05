@@ -11,7 +11,7 @@ import { listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
 import { monthLabel, monthRange } from '@/lib/dates';
 import { buildReportHtml, reportStyles, type ReportStyle } from '@/lib/report-html';
-import { accents } from '@/theme/palettes';
+import { deriveAccent } from '@/lib/color';
 import { useThemeStore } from '@/theme/theme-store';
 
 // Web: print the report from a hidden frame; the browser's print dialog offers "Save as PDF".
@@ -81,7 +81,7 @@ export default function ReportsScreen() {
         monthTitle: monthLabel(month.y, month.m),
         expenses,
         categories: categoryById,
-        accent: `rgb(${accents[accent]})`,
+        accent: deriveAccent(accent, 'light').accent,
       });
       if (Platform.OS === 'web') {
         printOnWeb(html);

@@ -9,16 +9,19 @@ import {
   softDeleteCategory,
   updateCategory,
 } from '@/db/categories-repo';
+import { categoryLabel } from '@/lib/category-display';
+import { useSyncState } from '@/lib/sync-engine';
 import { categoryEmojis } from '@/lib/emojis';
 
 export function CategoryManager() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [editing, setEditing] = useState<Category | 'new' | null>(null);
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState(categoryEmojis[0]);
+  const [emoji, setEmoji] = useState(''); // empty = no emoji (optional)
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { dataVersion } = useSyncState();
 
   const load = useCallback(async () => {
     try {
@@ -30,12 +33,12 @@ export function CategoryManager() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, dataVersion]);
 
   const open = (target: Category | 'new') => {
     setEditing(target);
     setName(target === 'new' ? '' : target.name);
-    setEmoji(target === 'new' ? categoryEmojis[0] : target.emoji);
+    setEmoji(target === 'new' ? '' : target.emoji);
     setError(null);
     setConfirmDelete(false);
   };
@@ -117,9 +120,7 @@ export function CategoryManager() {
               onPress={() => open(c)}
               className="rounded-full bg-zinc-200 px-3 py-1.5 active:opacity-60 dark:bg-zinc-800"
             >
-              <Text className="text-zinc-800 dark:text-zinc-200">
-                {c.emoji} {c.name}
-              </Text>
+              <Text className="text-zinc-800 dark:text-zinc-200">{categoryLabel(c)}</Text>
             </Pressable>
           ))}
         </View>
@@ -130,7 +131,7 @@ export function CategoryManager() {
           </Text>
 
           <View className="flex-row items-center gap-3">
-            <Text className="text-4xl">{emoji}</Text>
+            <Text className="w-12 text-center text-4xl text-zinc-400">{emoji || '•'}</Text>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -143,11 +144,15 @@ export function CategoryManager() {
             />
           </View>
 
+          <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+            Emoji is optional. Tap one to choose it, tap it again to remove it.
+          </Text>
+
           <View className="flex-row flex-wrap gap-1.5">
             {categoryEmojis.map((e) => (
               <Pressable
                 key={e}
-                onPress={() => setEmoji(e)}
+                onPress={() => setEmoji(emoji === e ? '' : e)}
                 className={`h-11 w-11 items-center justify-center rounded-xl ${
                   emoji === e ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
                 }`}

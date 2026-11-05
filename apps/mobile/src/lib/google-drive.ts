@@ -50,3 +50,8 @@ export async function uploadBackup(token: string, id: string | null, content: st
     body,
   });
 }
+
+// Removes the backup file from the hidden app folder in the user's Google Drive.
+export async function deleteBackup(token: string, id: string) {
+  await call(token, `${API}/drive/v3/files/${id}`, { method: 'DELETE' });
+}

@@ -34,7 +34,7 @@ export async function listCategories(includeDeleted = false): Promise<Category[]
   return rows.map(fromRow);
 }
 
-export async function createCategory(name: string, emoji: string): Promise<Category> {
+export async function createCategory(name: string, emoji = ''): Promise<Category> {
   const db = await getDb();
   const now = Date.now();
   const category = categorySchema.parse({
