@@ -108,30 +108,33 @@ export function ExpenseSheet({
   const yesterday = dayOffset(-1);
   const today = dayOffset(0);
   const tomorrow = dayOffset(1);
+  const typedName = newName.trim();
 
-  const addCategory = async () => {
-    const n = newName.trim();
-    if (!n) {
+  // Creates the category typed in the inline form (or selects the existing one with that name).
+  // Returns the category, or null if it could not be created.
+  const createFromForm = async (): Promise<Category | null> => {
+    if (!typedName) {
       setCatError('Enter a name');
-      return;
+      return null;
     }
-    if (allCats.some((c) => c.name.toLowerCase() === n.toLowerCase())) {
-      setCatError('You already have a category with that name');
-      return;
-    }
+    const existing = allCats.find((c) => c.name.toLowerCase() === typedName.toLowerCase());
     try {
       setCatBusy(true);
-      const created = await createCategory(n, newEmoji);
-      setExtra((prev) => [...prev, created]);
-      setCategoryId(created.id);
+      const result = existing ?? (await createCategory(typedName, newEmoji));
+      if (!existing) {
+        setExtra((prev) => [...prev, result]);
+        onCategoriesChanged?.();
+      }
+      setCategoryId(result.id);
       setCreating(false);
       setNewName('');
       setNewEmoji('');
       setCatError(null);
       setError(null);
-      onCategoriesChanged?.();
+      return result;
     } catch (e) {
       setCatError(String(e));
+      return null;
     } finally {
       setCatBusy(false);
     }
@@ -147,7 +150,15 @@ export function ExpenseSheet({
       );
       return;
     }
-    if (!categoryId) {
+
+    // If a new category was typed but not added yet, create it now and use it.
+    let chosenCategoryId = categoryId;
+    if (creating && typedName) {
+      const created = await createFromForm();
+      if (!created) return;
+      chosenCategoryId = created.id;
+    }
+    if (!chosenCategoryId) {
       setError('Choose a category');
       return;
     }
@@ -171,7 +182,7 @@ export function ExpenseSheet({
         await updateExpense(expense.id, {
           amountMinor: minor,
           currency,
-          categoryId,
+          categoryId: chosenCategoryId,
           note: note.trim(),
           spentAt,
         });
@@ -179,7 +190,7 @@ export function ExpenseSheet({
         await createExpense({
           amountMinor: minor,
           currency,
-          categoryId,
+          categoryId: chosenCategoryId,
           note: note.trim(),
           spentAt,
         });
@@ -306,9 +317,11 @@ export function ExpenseSheet({
               <Pressable
                 key={c.id}
                 onPress={() => setCategoryId(c.id)}
-                className={chip(categoryId === c.id)}
+                className={chip(categoryId === c.id && !(creating && typedName))}
               >
-                <Text className={chipText(categoryId === c.id)}>{categoryLabel(c)}</Text>
+                <Text className={chipText(categoryId === c.id && !(creating && typedName))}>
+                  {categoryLabel(c)}
+                </Text>
               </Pressable>
             ))}
             <Pressable
@@ -333,17 +346,23 @@ export function ExpenseSheet({
                   placeholderTextColor="#a1a1aa"
                   maxLength={20}
                   autoFocus
-                  onSubmitEditing={addCategory}
+                  onSubmitEditing={createFromForm}
                   className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
                 />
                 <Pressable
-                  onPress={addCategory}
+                  onPress={createFromForm}
                   disabled={catBusy}
                   className="rounded-xl bg-accent px-4 py-2"
                 >
                   <Text className="font-semibold text-white">{catBusy ? '...' : 'Add'}</Text>
                 </Pressable>
               </View>
+              {typedName ? (
+                <Text className="text-sm text-accent">
+                  This expense will be saved under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
+                  Press Add, or just press Save expense.
+                </Text>
+              ) : null}
               <Text className="text-xs text-zinc-500 dark:text-zinc-400">
                 Emoji is optional. Tap one to choose it, tap it again to remove it.
               </Text>

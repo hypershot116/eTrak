@@ -1,103 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { eraseLocalData, exportBackup, mergeBackup } from '@/db/backup-repo';
-import { getSetting, setSetting } from '@/db/settings-repo';
+import { SyncBanner } from '@/components/sync-banner';
+import { eraseLocalData } from '@/db/backup-repo';
+import { googleClientId, googleSupported, startGoogleSignIn } from '@/lib/google-auth';
 import {
-  clearGoogleSession,
-  getGoogleSession,
-  googleClientId,
-  googleSupported,
-  startGoogleSignIn,
-  type GoogleSession,
-} from '@/lib/google-auth';
-import { DriveAuthError, downloadBackup, findBackupId, uploadBackup } from '@/lib/google-drive';
+  afterLocalErase,
+  deleteCloudData,
+  signOutSync,
+  syncNow,
+  useSyncState,
+} from '@/lib/sync-engine';
 
 export function BackupPanel() {
-  const [session, setSession] = useState<GoogleSession | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<number | null>(null);
+  const sync = useSyncState();
   const [confirmErase, setConfirmErase] = useState(false);
-
-  useEffect(() => {
-    setSession(getGoogleSession());
-    getSetting('last_sync_at')
-      .then((v) => {
-        if (v) setLastSync(Number(v));
-      })
-      .catch(() => {});
-  }, []);
-
-  const sync = async () => {
-    const s = getGoogleSession();
-    if (!s) {
-      setSession(null);
-      setError('Your sign-in expired. Please sign in again.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const id = await findBackupId(s.accessToken);
-      let pulled = 0;
-      if (id) {
-        const remote = await downloadBackup(s.accessToken, id);
-        pulled = (await mergeBackup(remote)).changed;
-      }
-      const local = await exportBackup();
-      await uploadBackup(s.accessToken, id, JSON.stringify(local));
-      const now = Date.now();
-      await setSetting('last_sync_at', String(now));
-      setLastSync(now);
-      setMessage(
-        `Done. ${pulled} ${pulled === 1 ? 'record' : 'records'} updated from Drive, ${
-          local.categories.length + local.expenses.length
-        } saved to Drive.`
-      );
-    } catch (e) {
-      if (e instanceof DriveAuthError) {
-        clearGoogleSession();
-        setSession(null);
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const [confirmCloud, setConfirmCloud] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const busy = sync.syncing;
 
   const erase = async () => {
-    if (!lastSync) return;
+    if (!sync.lastSync) return;
     if (!confirmErase) {
       setConfirmErase(true);
       return;
     }
-    setBusy(true);
-    setError(null);
     try {
+      setLocalError(null);
       await eraseLocalData();
-      setLastSync(null);
+      await afterLocalErase();
       setConfirmErase(false);
-      setMessage('Data on this device erased. Press "Sync now" to bring it back from Google Drive.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+      setLocalError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const signOut = () => {
-    clearGoogleSession();
-    setSession(null);
-    setMessage(null);
-    setError(null);
+  const removeCloud = async () => {
+    if (!confirmCloud) {
+      setConfirmCloud(true);
+      return;
+    }
+    setConfirmCloud(false);
+    await deleteCloudData();
   };
+
+  const error = localError ?? sync.error;
 
   return (
     <View className="w-full gap-3">
       <Text className="text-lg font-semibold text-zinc-900 dark:text-white">Backup and sync</Text>
+
+      <SyncBanner />
 
       {!googleSupported ? (
         <Text className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -108,28 +61,50 @@ export function BackupPanel() {
           Google client ID is missing. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to apps/mobile/.env and
           restart the server.
         </Text>
-      ) : session ? (
+      ) : sync.signedIn ? (
         <>
           <Text className="text-sm text-zinc-600 dark:text-zinc-300">
-            Signed in{session.email ? ` as ${session.email}` : ''}
+            Signed in{sync.email ? ` as ${sync.email}` : ''}
+          </Text>
+          <Text className="text-sm text-zinc-700 dark:text-zinc-300">
+            {sync.paused
+              ? 'Auto-sync is paused. Press "Sync now" to turn it back on.'
+              : 'Auto-sync is on. Every change is saved to your Google Drive a moment after you make it.'}
           </Text>
           <Pressable
-            onPress={sync}
+            onPress={() => syncNow(true)}
             disabled={busy}
             className={`items-center rounded-2xl bg-accent py-3 ${busy ? 'opacity-50' : ''}`}
           >
             <Text className="font-semibold text-white">{busy ? 'Syncing...' : 'Sync now'}</Text>
           </Pressable>
           <Text className="text-xs text-zinc-500 dark:text-zinc-400">
-            {lastSync ? `Last sync: ${new Date(lastSync).toLocaleString()}` : 'Not synced yet'}. Your
-            data is saved in your own Google Drive, in a hidden folder only eTrak can use.
+            {sync.lastSync ? `Last sync: ${new Date(sync.lastSync).toLocaleString()}` : 'Not synced yet'}
+            . Your data is saved in your own Google Drive, in a hidden folder only eTrak can use.
           </Text>
+
+          <Pressable
+            onPress={removeCloud}
+            disabled={busy}
+            className={`items-center rounded-2xl py-3 ${
+              confirmCloud ? 'bg-red-500' : 'bg-red-500/15'
+            } ${busy ? 'opacity-40' : ''}`}
+          >
+            <Text className={`font-semibold ${confirmCloud ? 'text-white' : 'text-red-500'}`}>
+              {confirmCloud ? 'Tap again to delete cloud backup' : 'Delete cloud backup'}
+            </Text>
+          </Pressable>
+          <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+            Removes your backup from Google Drive. Your data on this device stays, and auto-sync
+            pauses until you press "Sync now".
+          </Text>
+
           <Pressable
             onPress={erase}
-            disabled={busy || !lastSync}
+            disabled={busy || !sync.lastSync}
             className={`items-center rounded-2xl py-3 ${
               confirmErase ? 'bg-red-500' : 'bg-red-500/15'
-            } ${busy || !lastSync ? 'opacity-40' : ''}`}
+            } ${busy || !sync.lastSync ? 'opacity-40' : ''}`}
           >
             <Text className={`font-semibold ${confirmErase ? 'text-white' : 'text-red-500'}`}>
               {confirmErase ? 'Tap again to erase' : 'Erase data on this device'}
@@ -137,25 +112,31 @@ export function BackupPanel() {
           </Pressable>
           <Text className="text-xs text-zinc-500 dark:text-zinc-400">
             Removes expenses and categories from this browser only. Your Google Drive backup stays.
-            Works only after you have synced.
+            Works only after you have synced. Press "Sync now" afterwards to bring everything back.
           </Text>
-          <Pressable onPress={signOut} className="self-start">
+
+          <Pressable onPress={signOutSync} className="self-start">
             <Text className="text-sm text-zinc-500 underline dark:text-zinc-400">Sign out</Text>
           </Pressable>
+          <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+            Signing out keeps your data on this device, but it is no longer saved to Google Drive.
+          </Text>
         </>
       ) : (
         <>
           <Pressable onPress={startGoogleSignIn} className="items-center rounded-2xl bg-accent py-3">
-            <Text className="font-semibold text-white">Sign in with Google</Text>
+            <Text className="font-semibold text-white">
+              {sync.error ? 'Sign in again with Google' : 'Sign in with Google'}
+            </Text>
           </Pressable>
           <Text className="text-xs text-zinc-500 dark:text-zinc-400">
-            Sign in to back up your expenses to your own Google Drive and restore them on another
-            device.
+            You are not signed in, so your expenses are saved on this device only. Sign in to save
+            them in your own Google Drive. After that, every change syncs automatically, and you can
+            restore everything on another device.
           </Text>
         </>
       )}
 
-      {message ? <Text className="text-sm text-accent">{message}</Text> : null}
       {error ? <Text className="text-sm text-red-500">{error}</Text> : null}
     </View>
   );

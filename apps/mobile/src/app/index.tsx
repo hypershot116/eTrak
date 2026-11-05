@@ -1,8 +1,7 @@
-import { categoryEmoji } from '@/lib/category-display';
 import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, PanResponder, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,8 +9,10 @@ import { CalendarPopup } from '@/components/calendar-popup';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { CalendarIcon } from '@/components/icons';
+import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
+import { categoryEmoji } from '@/lib/category-display';
 import {
   addDays,
   dayOffset,
@@ -24,6 +25,7 @@ import {
   weekdayName,
 } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
+import { useSyncState } from '@/lib/sync-engine';
 
 // Totals per currency (no conversion until exchange rates are added).
 function sumByCurrency(list: Expense[]): [string, number][] {
@@ -47,6 +49,7 @@ export default function HomeScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sync = useSyncState();
 
   const today = dayOffset(0);
   const { y, m } = parseDateParts(day);
@@ -70,6 +73,11 @@ export default function HomeScreen() {
       refresh();
     }, [refresh])
   );
+
+  // Reload when a sync brought in changes from Google Drive.
+  useEffect(() => {
+    if (sync.dataVersion > 0) refresh();
+  }, [sync.dataVersion, refresh]);
 
   const stepDay = useCallback((delta: number) => {
     setDay((prev) => addDays(prev, delta));
@@ -112,6 +120,18 @@ export default function HomeScreen() {
     setSheetOpen(true);
   };
 
+  const syncLabel = sync.syncing
+    ? 'Syncing...'
+    : sync.signedIn
+      ? sync.error
+        ? 'Could not sync. Will try again.'
+        : sync.paused
+          ? 'Cloud sync paused'
+          : 'Synced to Google Drive'
+      : sync.error
+        ? 'Google sign-in expired. Open Settings to sign in again.'
+        : 'Saved on this device only';
+
   const arrow =
     'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 active:opacity-60 dark:bg-zinc-800';
 
@@ -134,8 +154,10 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
+        <Text className="-mt-3 pb-3 text-xs text-zinc-500 dark:text-zinc-400">{syncLabel}</Text>
 
         <DbErrorBanner error={error} />
+        <SyncBanner />
 
         <View className="mb-3 flex-row items-center justify-between">
           <Pressable onPress={() => stepDay(-1)} className={arrow}>

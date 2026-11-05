@@ -10,6 +10,7 @@ import {
   updateCategory,
 } from '@/db/categories-repo';
 import { categoryLabel } from '@/lib/category-display';
+import { useSyncState } from '@/lib/sync-engine';
 import { categoryEmojis } from '@/lib/emojis';
 
 export function CategoryManager() {
@@ -20,6 +21,7 @@ export function CategoryManager() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { dataVersion } = useSyncState();
 
   const load = useCallback(async () => {
     try {
@@ -31,7 +33,7 @@ export function CategoryManager() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, dataVersion]);
 
   const open = (target: Category | 'new') => {
     setEditing(target);

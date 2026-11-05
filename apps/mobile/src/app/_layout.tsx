@@ -1,4 +1,5 @@
 import "../../global.css";
+import { initSync } from '@/lib/sync-engine';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'nativewind';
@@ -14,7 +15,9 @@ SplashScreen.preventAutoHideAsync();
 export default function TabLayout() {
   const { colorScheme } = useColorScheme();
   useEffect(() => {
-    captureGoogleRedirect();
+    captureGoogleRedirect().finally(() => {
+      initSync();
+    });
   }, []);
   return (
     <ThemeRoot>
