@@ -9,6 +9,7 @@ import { CalendarPopup } from '@/components/calendar-popup';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { CalendarIcon } from '@/components/icons';
+import { GradientRing } from '@/components/gradient-ring';
 import { Logo } from '@/components/logo';
 import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
@@ -113,6 +114,14 @@ export default function HomeScreen() {
   const dayTotals = useMemo(() => sumByCurrency(dayExpenses), [dayExpenses]);
   const monthTotals = useMemo(() => sumByCurrency(monthExpenses), [monthExpenses]);
 
+  // The biggest currency of the day as a share of the same currency's month total (for the ring).
+  const share = useMemo(() => {
+    const first = dayTotals[0];
+    if (!first) return 0;
+    const month = monthTotals.find(([c]) => c === first[0])?.[1] ?? 0;
+    return month > 0 ? Math.min(1, first[1] / month) : 0;
+  }, [dayTotals, monthTotals]);
+
   const openNew = () => {
     setEditing(null);
     setSheetOpen(true);
@@ -185,18 +194,26 @@ export default function HomeScreen() {
 
         {dayTotals.length > 0 ? (
           <View
-            className="mb-2 gap-1 rounded-2xl border bg-zinc-100 p-4 dark:bg-zinc-900"
+            className="mb-2 flex-row items-center gap-4 rounded-2xl border bg-zinc-100 p-4 dark:bg-zinc-900"
             style={{ borderColor: a.tint(0.35), boxShadow: `0 0 18px ${a.tint(0.18)}` }}
           >
-            <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-              {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
-              {dayExpenses.length === 1 ? 'expense' : 'expenses'}
-            </Text>
-            {dayTotals.map(([code, minor]) => (
-              <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
-                {formatMinor(minor, code)}
+            <GradientRing progress={share} size={112} stroke={10}>
+              <Text className="text-lg font-bold text-zinc-900 dark:text-white">
+                {Math.round(share * 100)}%
               </Text>
-            ))}
+              <Text className="text-[10px] text-zinc-500 dark:text-zinc-400">of month</Text>
+            </GradientRing>
+            <View className="flex-1 gap-1">
+              <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
+                {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
+                {dayExpenses.length === 1 ? 'expense' : 'expenses'}
+              </Text>
+              {dayTotals.map(([code, minor]) => (
+                <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
+                  {formatMinor(minor, code)}
+                </Text>
+              ))}
+            </View>
           </View>
         ) : null}
 
