@@ -3,6 +3,7 @@
 **Last Updated:** November 6, 2026  
 **Current Version:** v0.5.0 (Release Candidate)  
 **Live Production URL:** https://etrak.pages.dev  
+**Distribution Artifact:** dist/eTrak-v0.5.0-release.apk  
 **Repository:** https://github.com/hypershot116/eTrak  
 
 ---
@@ -59,14 +60,13 @@ eTrak follows a strict local-first paradigm with zero custodian backend servers.
 - Configured native Android toolchain on Ubuntu without reliance on third-party cloud build queues.
 - Resolved native NDK header definitions and `source.properties` structure.
 - Resolved Metro bundling conflict by hoisting `babel-preset-expo` to monorepo and workspace root.
-- Generated standalone production APK:
-  `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
-- Validated native SQLite bindings, offline assets, and JavaScript bundles.
+- Generated standalone production APK: `dist/eTrak-v0.5.0-release.apk`.
+- Updated recruiter-focused README with live web URL, architectural diagrams, testing instructions, and APK download links.
 
 ---
 
 ## 4. Immediate Next Tasks
 
-1. **Device Verification:** Sideload `app-release.apk` to physical Android device via USB/ADB and confirm SQLite operations.
+1. **Device Verification:** Sideload `dist/eTrak-v0.5.0-release.apk` to physical Android device via USB/ADB and confirm SQLite operations.
 2. **Version Control Finalization:** Commit local build configuration fixes and push release tag `v0.5.0` to remote `develop` and `main` branches.
 3. **Distribution Setup:** Upload release APK to GitHub Releases and Google Drive public download link.
