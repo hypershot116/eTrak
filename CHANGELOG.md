@@ -8,8 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+- README with setup instructions for running the project on any PC, and an example settings file (apps/mobile/.env.example)
+
 ### Planned
-- README with setup instructions for running the project on any PC
 - Android APK shared through a Google Drive link
 - Free cloud hosting for the web version (Cloudflare Pages)
 - Hono API with Swagger UI, and a longer-lived Google sign-in through the API
