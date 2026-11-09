@@ -13,6 +13,7 @@ import { Logo } from '@/components/logo';
 import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
 import { listExpensesInRange } from '@/db/expenses-repo';
+import { getSetting } from '@/db/settings-repo';
 import { categoryEmoji } from '@/lib/category-display';
 import {
   addDays,
@@ -27,10 +28,20 @@ import { formatMinor } from '@/lib/money';
 import { useAccent } from '@/lib/use-accent';
 import { readSession, useSyncState } from '@/lib/sync-engine';
 
-function sumByCurrency(list: Expense[]): [string, number][] {
+// Calculates totals but forces the user's Main Currency to ALWAYS be index 0
+function calculateTotals(list: Expense[], mainCur: string): [string, number][] {
   const sums = new Map<string, number>();
-  for (const e of list) sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
-  return [...sums.entries()].sort((a, b) => b[1] - a[1]);
+  sums.set(mainCur, 0); // Guarantee the main currency is always present
+  
+  for (const e of list) {
+    sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
+  }
+  
+  return [...sums.entries()].sort((a, b) => {
+    if (a[0] === mainCur) return -1;
+    if (b[0] === mainCur) return 1;
+    return b[1] - a[1];
+  });
 }
 
 function tick() {
@@ -43,6 +54,7 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [monthExpenses, setMonthExpenses] = useState<Expense[]>([]);
+  const [mainCurrency, setMainCurrency] = useState('USD');
   const [day, setDay] = useState(() => dayOffset(0));
   const [sheetOpen, setSheetOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -60,6 +72,9 @@ export default function HomeScreen() {
 
   const refresh = useCallback(async () => {
     try {
+      const mc = await getSetting('main_currency');
+      if (mc) setMainCurrency(mc);
+
       await ensureDefaultCategories();
       setCategories(await listCategories());
       setAllCategories(await listCategories(true));
@@ -111,7 +126,11 @@ export default function HomeScreen() {
     () => monthExpenses.filter((e) => toDateInput(e.spentAt) === day),
     [monthExpenses, day]
   );
-  const dayTotals = useMemo(() => sumByCurrency(dayExpenses), [dayExpenses]);
+  
+  const dayTotals = useMemo(
+    () => calculateTotals(dayExpenses, mainCurrency), 
+    [dayExpenses, mainCurrency]
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -183,42 +202,22 @@ export default function HomeScreen() {
             Total Spent Today
           </Text>
           
-          {dayTotals.length === 0 ? (
-            <Text className="text-[40px] font-bold text-zinc-300 dark:text-zinc-800">
-              0.00
-            </Text>
-          ) : (
-            <View className="items-start w-full">
-              {dayTotals.slice(0, 3).map(([cur, minor], idx) => {
-                const str = formatMinor(minor, cur);
-                const space = str.indexOf(' ');
-                const code = str.slice(0, space);
-                const val = str.slice(space + 1);
+          <View className="items-start w-full">
+            {dayTotals.slice(0, 3).map(([cur, minor], idx) => {
+              const str = formatMinor(minor, cur);
+              const space = str.indexOf(' ');
+              const code = str.slice(0, space);
+              const val = str.slice(space + 1);
 
-                // Primary (Largest) Currency
-                if (idx === 0) {
-                  return (
-                    <View key={cur} className="flex-row items-baseline gap-2 w-full">
-                      <Text style={{ color: a.accent }} className="text-lg font-black">
-                        {code}
-                      </Text>
-                      <Text 
-                        className="text-[44px] leading-tight font-black text-zinc-900 dark:text-white shrink"
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                      >
-                        {val}
-                      </Text>
-                    </View>
-                  );
-                }
-
-                // Secondary Currencies
+              // Primary (Main) Currency - ALWAYS index 0, even if amount is 0
+              if (idx === 0) {
                 return (
-                  <View key={cur} className="flex-row items-baseline gap-2 mt-0.5 opacity-80 w-full">
-                    <Text className="text-sm font-bold text-zinc-500">{code}</Text>
+                  <View key={cur} className="flex-row items-baseline gap-2 w-full">
+                    <Text style={{ color: a.accent }} className="text-lg font-black">
+                      {code}
+                    </Text>
                     <Text 
-                      className="text-xl font-bold text-zinc-800 dark:text-zinc-300 shrink"
+                      className="text-[44px] leading-tight font-black text-zinc-900 dark:text-white shrink"
                       numberOfLines={1}
                       adjustsFontSizeToFit
                     >
@@ -226,9 +225,25 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 );
-              })}
-            </View>
-          )}
+              }
+
+              // Secondary Currencies (Only show if > 0)
+              if (minor === 0) return null;
+
+              return (
+                <View key={cur} className="flex-row items-baseline gap-2 mt-0.5 opacity-80 w-full">
+                  <Text className="text-sm font-bold text-zinc-500">{code}</Text>
+                  <Text 
+                    className="text-xl font-bold text-zinc-800 dark:text-zinc-300 shrink"
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {val}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
 
         <View className="mb-2 flex-row items-center justify-between pt-3">
