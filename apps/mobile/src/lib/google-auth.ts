@@ -9,12 +9,56 @@ export type GoogleSession = { accessToken: string; expiresAt: number; email: str
 export const googleSupported = Platform.OS === 'web';
 export const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-// Sends the whole page to Google; Google sends the user back with a token in the address.
+// BroadcastChannel for instant multi-tab session coordination
+let authChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    authChannel = new BroadcastChannel('etrak_auth_sync');
+  } catch {}
+}
+
+export function subscribeToAuthChanges(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === SESSION_KEY) {
+      callback();
+    }
+  };
+
+  const handleChannel = (e: MessageEvent) => {
+    if (e.data?.type === 'AUTH_STATE_CHANGED') {
+      callback();
+    }
+  };
+
+  window.addEventListener('storage', handleStorage);
+  if (authChannel) {
+    authChannel.addEventListener('message', handleChannel);
+  }
+
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    if (authChannel) {
+      authChannel.removeEventListener('message', handleChannel);
+    }
+  };
+}
+
+function broadcastAuthUpdate() {
+  if (authChannel) {
+    try {
+      authChannel.postMessage({ type: 'AUTH_STATE_CHANGED', timestamp: Date.now() });
+    } catch {}
+  }
+}
+
+// Sends the page to Google OAuth endpoint
 export function startGoogleSignIn() {
   if (!googleSupported || !googleClientId) return;
   const state = crypto.randomUUID();
   try {
-    sessionStorage.setItem(STATE_KEY, state);
+    localStorage.setItem(STATE_KEY, state);
   } catch {}
   const params = new URLSearchParams({
     client_id: googleClientId,
@@ -28,7 +72,7 @@ export function startGoogleSignIn() {
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
-// Runs once at app start: picks up the token Google put in the address and stores it.
+// Runs once at app start: parses the token returned by Google
 export async function captureGoogleRedirect() {
   if (!googleSupported || typeof window === 'undefined') return;
   const hash = window.location.hash;
@@ -39,7 +83,8 @@ export async function captureGoogleRedirect() {
 
   let expected: string | null = null;
   try {
-    expected = sessionStorage.getItem(STATE_KEY);
+    expected = localStorage.getItem(STATE_KEY) ?? sessionStorage.getItem(STATE_KEY);
+    localStorage.removeItem(STATE_KEY);
     sessionStorage.removeItem(STATE_KEY);
   } catch {}
 
@@ -56,24 +101,32 @@ export async function captureGoogleRedirect() {
   } catch {}
 
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ accessToken: token, expiresAt, email }));
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ accessToken: token, expiresAt, email }));
+    broadcastAuthUpdate();
   } catch {}
 }
 
 export function getGoogleSession(): GoogleSession | null {
-  if (!googleSupported) return null;
+  if (!googleSupported || typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as GoogleSession;
-    return s.expiresAt > Date.now() + 30_000 ? s : null;
+    if (s.expiresAt > Date.now() + 30_000) {
+      return s;
+    }
+    clearGoogleSession();
+    return null;
   } catch {
     return null;
   }
 }
 
 export function clearGoogleSession() {
+  if (typeof window === 'undefined') return;
   try {
+    localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
+    broadcastAuthUpdate();
   } catch {}
 }
