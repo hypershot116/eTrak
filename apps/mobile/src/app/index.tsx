@@ -317,6 +317,7 @@ export default function HomeScreen() {
         onSelect={(d) => setDay(d)}
         onClose={() => setCalendarOpen(false)}
       />
+      <View style={{ position: "absolute", bottom: 8, left: 12, opacity: 0.4, pointerEvents: "none" }}><Text style={{ color: "#a1a1aa", fontSize: 11, fontWeight: "600" }}>v1.0.1</Text></View>
     </SafeAreaView>
   );
 }
