@@ -9,7 +9,6 @@ import { CalendarPopup } from '@/components/calendar-popup';
 import { DbErrorBanner } from '@/components/db-error-banner';
 import { ExpenseSheet } from '@/components/expense-sheet';
 import { CalendarIcon } from '@/components/icons';
-import { GradientRing } from '@/components/gradient-ring';
 import { Logo } from '@/components/logo';
 import { SyncBanner } from '@/components/sync-banner';
 import { ensureDefaultCategories, listCategories } from '@/db/categories-repo';
@@ -25,7 +24,6 @@ import {
   weekdayName,
 } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
-import { useAccent } from '@/lib/use-accent';
 import { readSession, useSyncState } from '@/lib/sync-engine';
 
 function sumByCurrency(list: Expense[]): [string, number][] {
@@ -50,7 +48,6 @@ export default function HomeScreen() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sync = useSyncState();
-  const a = useAccent();
 
   const today = dayOffset(0);
   const { y, m } = parseDateParts(day);
@@ -113,14 +110,6 @@ export default function HomeScreen() {
     [monthExpenses, day]
   );
   const dayTotals = useMemo(() => sumByCurrency(dayExpenses), [dayExpenses]);
-  const monthTotals = useMemo(() => sumByCurrency(monthExpenses), [monthExpenses]);
-
-  const share = useMemo(() => {
-    const first = dayTotals[0];
-    if (!first) return 0;
-    const month = monthTotals.find(([c]) => c === first[0])?.[1] ?? 0;
-    return month > 0 ? Math.min(1, first[1] / month) : 0;
-  }, [dayTotals, monthTotals]);
 
   const openNew = () => {
     setEditing(null);
@@ -202,24 +191,40 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            <View className="my-2 items-center justify-center">
-              <GradientRing progress={share} size={150} strokeWidth={10}>
-                <View className="items-center">
-                  {dayTotals.length === 0 ? (
-                    <Text className="text-sm text-zinc-400">No spending</Text>
-                  ) : (
-                    dayTotals.map(([cur, minor]) => (
-                      <Text key={cur} className="text-2xl font-black text-zinc-900 dark:text-white">
-                        {formatMinor(minor, cur)}
+            <View className="my-3 items-start">
+              <Text className="mb-1 text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+                Total spent today
+              </Text>
+              {dayTotals.length === 0 ? (
+                <Text className="text-2xl font-bold text-zinc-400 dark:text-zinc-600">
+                  No spending
+                </Text>
+              ) : (
+                <View className="gap-1">
+                  {dayTotals.map(([cur, minor], idx) => {
+                    const formatted = formatMinor(minor, cur);
+                    const amountOnly = formatted.replace(/^[A-Z]+\s*/, '');
+                    return idx === 0 ? (
+                      <View key={cur} className="flex-row items-baseline gap-2">
+                        <Text className="text-xl font-extrabold text-accent">{cur}</Text>
+                        <Text className="text-4xl font-black text-zinc-900 dark:text-white">
+                          {amountOnly}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        key={cur}
+                        className="text-sm font-semibold text-zinc-500 dark:text-zinc-400"
+                      >
+                        {formatted}
                       </Text>
-                    ))
-                  )}
-                  <Text className="text-xs text-zinc-500 dark:text-zinc-400">Total today</Text>
+                    );
+                  })}
                 </View>
-              </GradientRing>
+              )}
             </View>
 
-            <View className="mb-2 flex-row items-center justify-between pt-3">
+            <View className="mb-2 flex-row items-center justify-between pt-2">
               <Text className="text-sm font-bold uppercase tracking-wider text-zinc-500">Expenses</Text>
               <Pressable
                 onPress={openNew}
@@ -288,7 +293,7 @@ export default function HomeScreen() {
         }}
       >
         <Text className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-          v2.0.0
+          v2.0.3
         </Text>
       </View>
     </SafeAreaView>

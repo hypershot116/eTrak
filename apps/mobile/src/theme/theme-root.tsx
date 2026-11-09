@@ -1,6 +1,6 @@
 import { useColorScheme, vars } from 'nativewind';
-import { useEffect, useMemo, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Platform, View } from 'react-native';
 
 import { deriveAccent, deriveSurfaces, hexToRgb } from '@/lib/color';
 import { useThemeStore } from './theme-store';
@@ -12,25 +12,47 @@ export function ThemeRoot({ children }: { children: ReactNode }) {
   const hydrated = useThemeStore((s) => s.hydrated);
   const hydrate = useThemeStore((s) => s.hydrate);
   const { colorScheme, setColorScheme } = useColorScheme();
+  const mountedRef = useRef(false);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
   useEffect(() => {
-    setColorScheme(mode);
-  }, [mode, setColorScheme]);
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      // Defer initial colorScheme assignment until React finishes mounting routes
+      const timer = setTimeout(() => {
+        if (colorScheme !== mode) {
+          setColorScheme(mode);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
 
-  // Accent colors and the background ramp are all generated from the user's choices.
+    if (colorScheme !== mode) {
+      // Use requestAnimationFrame on web to avoid dispatching during router chunk evaluations
+      if (Platform.OS === 'web' && typeof requestAnimationFrame !== 'undefined') {
+        const frame = requestAnimationFrame(() => {
+          setColorScheme(mode);
+        });
+        return () => cancelAnimationFrame(frame);
+      } else {
+        setColorScheme(mode);
+      }
+    }
+  }, [mode, colorScheme, setColorScheme]);
+
   const cssVars = useMemo(() => {
-    const d = deriveAccent(accent, colorScheme === 'dark' ? 'dark' : 'light');
+    const activeScheme = (mode === 'system' ? colorScheme : mode) === 'dark' ? 'dark' : 'light';
+    const d = deriveAccent(accent, activeScheme);
     const on = hexToRgb(d.onAccent);
     return vars({
       '--accent': d.accentRgb,
       '--on-accent': `${on.r} ${on.g} ${on.b}`,
       ...deriveSurfaces(accent, surface),
     });
-  }, [accent, surface, colorScheme]);
+  }, [accent, surface, mode, colorScheme]);
 
   return (
     <View style={[{ flex: 1 }, cssVars]} className="bg-zinc-50 dark:bg-zinc-950">
