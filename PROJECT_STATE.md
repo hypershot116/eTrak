@@ -63,15 +63,16 @@ eTrak follows a strict local-first paradigm with zero custodian backend servers.
 - Resolved Metro bundling conflict by hoisting `babel-preset-expo` to monorepo and workspace root.
 - Generated standalone production APK: `dist/eTrak-v0.5.0-release.apk`.
 
-### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth (Current)
+### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth (Deployed)
 - Replaced tab-isolated `sessionStorage` with synchronized `localStorage` and `BroadcastChannel` auth notifications.
 - Resolved web `Invalid VFS state` SQLite lock error through exponential backoff retry and non-colliding fallback.
 - Added cross-tab transaction broadcast notifications to keep UI state unified across concurrent browser windows.
+- Deployed fix to `main` for Cloudflare Pages automated edge distribution.
 
 ---
 
 ## 4. Immediate Next Tasks
 
-1. **Deploy to Cloudflare:** Merge `develop` into `main` and push to trigger automated deployment on `https://etrak.pages.dev`.
-2. **Multi-Tab Web Validation:** Open two tabs at `https://etrak.pages.dev`, log in on Tab 1, and verify Tab 2 reflects the account and database state without VFS errors.
-3. **Physical Device Installation:** Install `dist/eTrak-v0.5.0-release.apk` onto physical Android device.
+1. **Multi-Tab Web Validation:** Open two tabs at `https://etrak.pages.dev`, log in on Tab 1, and verify Tab 2 reflects the account and database state without VFS errors.
+2. **Physical Device Installation:** Install `dist/eTrak-v0.5.0-release.apk` onto physical Android device.
+3. **GitHub Release Publication:** Create release `v0.5.0` on GitHub and attach the binary.
