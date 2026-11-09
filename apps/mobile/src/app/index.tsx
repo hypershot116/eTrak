@@ -18,15 +18,15 @@ import { categoryEmoji } from '@/lib/category-display';
 import {
   addDays,
   dayOffset,
-  monthLabel,
   monthRange,
   parseDateParts,
+  shortDateLabel,
   toDateInput,
   weekdayName,
 } from '@/lib/dates';
 import { formatMinor } from '@/lib/money';
 import { useAccent } from '@/lib/use-accent';
-import { useSyncState } from '@/lib/sync-engine';
+import { readSession, useSyncState } from '@/lib/sync-engine';
 
 function sumByCurrency(list: Expense[]): [string, number][] {
   const sums = new Map<string, number>();
@@ -55,6 +55,10 @@ export default function HomeScreen() {
   const today = dayOffset(0);
   const { y, m } = parseDateParts(day);
 
+  useEffect(() => {
+    readSession();
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       await ensureDefaultCategories();
@@ -65,7 +69,6 @@ export default function HomeScreen() {
       setError(null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      // Suppress temporary VFS state locks during concurrent tab load
       if (!msg.includes('Invalid VFS state') && !msg.includes('locked')) {
         setError(msg);
       }
@@ -135,11 +138,11 @@ export default function HomeScreen() {
     ? `Synced (${sync.email ?? 'Google account'})`
     : 'Local only (not signed in)';
 
-  const arrow = 'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800';
+  const arrow = 'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 active:opacity-60';
 
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-black">
-      <View {...pan.panHandlers} className="flex-1 px-5 pt-3">
+      <View {...pan.panHandlers} className="flex-1 w-full max-w-xl mx-auto px-5 pt-3">
         <View className="mb-4 flex-row items-center justify-between">
           <Logo />
           <View className="flex-row items-center gap-2">
@@ -171,7 +174,7 @@ export default function HomeScreen() {
               {weekdayName(day)}
             </Text>
             <Text className="text-2xl font-bold text-zinc-900 dark:text-white">
-              {monthLabel(day)}
+              {shortDateLabel(day)}
             </Text>
           </Pressable>
           <Pressable onPress={() => stepDay(1)} className={arrow}>
