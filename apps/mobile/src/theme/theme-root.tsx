@@ -21,7 +21,6 @@ export function ThemeRoot({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
-      // Defer initial colorScheme assignment until React finishes mounting routes
       const timer = setTimeout(() => {
         if (colorScheme !== mode) {
           setColorScheme(mode);
@@ -31,7 +30,6 @@ export function ThemeRoot({ children }: { children: ReactNode }) {
     }
 
     if (colorScheme !== mode) {
-      // Use requestAnimationFrame on web to avoid dispatching during router chunk evaluations
       if (Platform.OS === 'web' && typeof requestAnimationFrame !== 'undefined') {
         const frame = requestAnimationFrame(() => {
           setColorScheme(mode);

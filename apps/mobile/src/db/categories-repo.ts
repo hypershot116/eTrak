@@ -28,18 +28,19 @@ export async function listCategories(includeDeleted = false): Promise<Category[]
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
     includeDeleted
-      ? 'SELECT * FROM categories ORDER BY name'
-      : 'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY name'
+      ? 'SELECT * FROM categories ORDER BY name COLLATE NOCASE ASC'
+      : 'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE ASC'
   );
   return rows.map(fromRow);
 }
 
 export async function createCategory(name: string, emoji = ''): Promise<Category> {
   const db = await getDb();
+  const cleanName = name.trim();
   const now = Date.now();
   const category = categorySchema.parse({
     id: newId(),
-    name,
+    name: cleanName,
     emoji,
     createdAt: now,
     updatedAt: now,
@@ -73,6 +74,7 @@ export async function updateCategory(
   const category = categorySchema.parse({
     ...fromRow(row),
     ...changes,
+    name: changes.name.trim(),
     updatedAt: Date.now(),
     deviceId: await getDeviceId(),
   });
@@ -87,7 +89,7 @@ export async function updateCategory(
   return category;
 }
 
-// Soft delete: old expenses keep their category for history and reports.
+// Soft delete: user can delete any category, old expenses keep categoryId for history.
 export async function softDeleteCategory(id: string) {
   const db = await getDb();
   const now = Date.now();
@@ -109,12 +111,57 @@ const defaults: [string, string][] = [
   ['Fun', '🎬'],
 ];
 
-// Adds starter categories the first time the app runs.
-export async function ensureDefaultCategories() {
+let ensurePromise: Promise<void> | null = null;
+
+// Merges duplicate categories with the same name, reassigning expenses to the original
+async function deduplicateCategories() {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
-  if ((row?.n ?? 0) > 0) return;
-  for (const [name, emoji] of defaults) {
-    await createCategory(name, emoji);
+  const rows = await db.getAllAsync<Row>(
+    'SELECT * FROM categories WHERE deleted_at IS NULL ORDER BY created_at ASC'
+  );
+
+  const seen = new Map<string, string>(); // lowerName -> canonicalId
+  for (const r of rows) {
+    const key = r.name.trim().toLowerCase();
+    const canonical = seen.get(key);
+    if (!canonical) {
+      seen.set(key, r.id);
+    } else {
+      // Re-assign any expenses referencing the duplicate to canonical ID
+      await db.runAsync('UPDATE expenses SET category_id = ? WHERE category_id = ?', canonical, r.id);
+      // Delete the duplicate category row
+      await db.runAsync('DELETE FROM categories WHERE id = ?', r.id);
+    }
   }
+}
+
+// Adds starter categories the first time the app runs and deduplicates existing ones
+export async function ensureDefaultCategories(): Promise<void> {
+  if (ensurePromise) return ensurePromise;
+
+  ensurePromise = (async () => {
+    try {
+      const db = await getDb();
+
+      // Clean up any historical duplicate entries first
+      await deduplicateCategories();
+
+      // Check existing category names (including deleted) to prevent re-seeding
+      const existing = await db.getAllAsync<{ name: string }>(
+        'SELECT name FROM categories'
+      );
+      const existingNames = new Set(existing.map((e) => e.name.trim().toLowerCase()));
+
+      for (const [name, emoji] of defaults) {
+        if (!existingNames.has(name.toLowerCase())) {
+          await createCategory(name, emoji);
+          existingNames.add(name.toLowerCase());
+        }
+      }
+    } finally {
+      ensurePromise = null;
+    }
+  })();
+
+  return ensurePromise;
 }
