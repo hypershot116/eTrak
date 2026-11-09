@@ -10,15 +10,29 @@ import AppTabs from '@/components/app-tabs';
 import { captureGoogleRedirect } from '@/lib/google-auth';
 import { ThemeRoot } from '@/theme/theme-root';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function TabLayout() {
   const { colorScheme } = useColorScheme();
+
   useEffect(() => {
-    captureGoogleRedirect().finally(() => {
-      initSync();
-    });
+    let active = true;
+    (async () => {
+      try {
+        await captureGoogleRedirect();
+      } finally {
+        if (active) {
+          await initSync();
+          await SplashScreen.hideAsync().catch(() => {});
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
+
   return (
     <ThemeRoot>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

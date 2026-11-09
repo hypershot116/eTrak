@@ -1,7 +1,7 @@
 # eTrak - Project State & Architecture
 
 **Last Updated:** November 9, 2026  
-**Current Version:** v0.5.1 (Multi-Tab Web Concurrency & Auth Sync)  
+**Current Version:** v0.5.2 (Mobile Responsive Modal & Hydrated Multi-Tab Sync)  
 **Live Production URL:** https://etrak.pages.dev  
 **Distribution Artifact:** dist/eTrak-v0.5.0-release.apk  
 **Repository:** https://github.com/hypershot116/eTrak  
@@ -12,7 +12,7 @@
 
 eTrak follows a strict local-first paradigm with zero custodian backend servers.
 
-* **Local Storage Layer:** Encrypted local SQLite via `@expo-sqlite` and `op-sqlite` with multi-tab VFS lock resilience.
+* **Local Storage Layer:** Encrypted local SQLite via `@expo-sqlite` and `op-sqlite` with multi-tab VFS lock resilience and startup hydration safety.
 * **State Management:** React Native hooks, context providers, and localized synchronous persistence.
 * **Cloud Backup Layer:** Direct client-to-Google Drive synchronization via the isolated `appDataFolder` scope (`https://www.googleapis.com/auth/drive.appdata`). No central database has access to financial records.
 * **Web Hosting:** Cloudflare Pages with automated Git continuous deployment targeting the `main` branch.
@@ -63,16 +63,20 @@ eTrak follows a strict local-first paradigm with zero custodian backend servers.
 - Resolved Metro bundling conflict by hoisting `babel-preset-expo` to monorepo and workspace root.
 - Generated standalone production APK: `dist/eTrak-v0.5.0-release.apk`.
 
-### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth (Deployed)
+### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth
 - Replaced tab-isolated `sessionStorage` with synchronized `localStorage` and `BroadcastChannel` auth notifications.
 - Resolved web `Invalid VFS state` SQLite lock error through exponential backoff retry and non-colliding fallback.
 - Added cross-tab transaction broadcast notifications to keep UI state unified across concurrent browser windows.
-- Deployed fix to `main` for Cloudflare Pages automated edge distribution.
+
+### Milestone v0.5.2 – Mobile Web Usability & Startup Hydration (Current)
+- Refactored `ExpenseSheet` modal with responsive height constraints (`100dvh` / `maxHeight: 88dvh`) and fixed viewport centering to prevent mobile browser clipping.
+- Integrated `subscribeToAuthChanges` into `sync-engine.ts` so all open tabs detect login and data changes immediately.
+- Coordinated startup sequence in `_layout.tsx` and suppressed transient VFS locking notifications in `index.tsx`, eliminating unauthenticated empty screen flashes.
 
 ---
 
 ## 4. Immediate Next Tasks
 
-1. **Multi-Tab Web Validation:** Open two tabs at `https://etrak.pages.dev`, log in on Tab 1, and verify Tab 2 reflects the account and database state without VFS errors.
-2. **Physical Device Installation:** Install `dist/eTrak-v0.5.0-release.apk` onto physical Android device.
-3. **GitHub Release Publication:** Create release `v0.5.0` on GitHub and attach the binary.
+1. **Production Deployment:** Merge into `main` to trigger Cloudflare Pages deployment.
+2. **Device & Multi-Tab Verification:** Confirm on mobile Chrome/Safari that the Add Expense sheet stays within the screen, and verify multi-tab auto-login on desktop.
+3. **Android Physical Sideload:** Install `dist/eTrak-v0.5.0-release.apk` on physical hardware.

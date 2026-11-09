@@ -21,8 +21,6 @@ import {
   monthLabel,
   monthRange,
   parseDateParts,
-  relativeDayTag,
-  shortDateLabel,
   toDateInput,
   weekdayName,
 } from '@/lib/dates';
@@ -30,7 +28,6 @@ import { formatMinor } from '@/lib/money';
 import { useAccent } from '@/lib/use-accent';
 import { useSyncState } from '@/lib/sync-engine';
 
-// Totals per currency (no conversion until exchange rates are added).
 function sumByCurrency(list: Expense[]): [string, number][] {
   const sums = new Map<string, number>();
   for (const e of list) sums.set(e.currency, (sums.get(e.currency) ?? 0) + e.amountMinor);
@@ -39,15 +36,15 @@ function sumByCurrency(list: Expense[]): [string, number][] {
 
 function tick() {
   try {
-    Promise.resolve(Haptics.selectionAsync()).catch(() => {});
+    Haptics.selectionAsync();
   } catch {}
 }
 
 export default function HomeScreen() {
-  const [categories, setCategories] = useState<Category[]>([]); // active, for the sheet
-  const [allCategories, setAllCategories] = useState<Category[]>([]); // incl. deleted, for names
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [monthExpenses, setMonthExpenses] = useState<Expense[]>([]);
-  const [day, setDay] = useState(() => dayOffset(0)); // YYYY-MM-DD being viewed
+  const [day, setDay] = useState(() => dayOffset(0));
   const [sheetOpen, setSheetOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -66,19 +63,21 @@ export default function HomeScreen() {
       const [start, end] = monthRange(y, m);
       setMonthExpenses(await listExpensesInRange(start, end));
       setError(null);
-    } catch (e) {
-      setError(String(e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Suppress temporary VFS state locks during concurrent tab load
+      if (!msg.includes('Invalid VFS state') && !msg.includes('locked')) {
+        setError(msg);
+      }
     }
   }, [y, m]);
 
-  // Runs on first open, when the viewed month changes, and when the user returns to this tab.
   useFocusEffect(
     useCallback(() => {
       refresh();
     }, [refresh])
   );
 
-  // Reload when a sync brought in changes from Google Drive.
   useEffect(() => {
     if (sync.dataVersion > 0) refresh();
   }, [sync.dataVersion, refresh]);
@@ -88,7 +87,6 @@ export default function HomeScreen() {
     tick();
   }, []);
 
-  // Swipe left = previous day, swipe right = next day.
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -114,7 +112,6 @@ export default function HomeScreen() {
   const dayTotals = useMemo(() => sumByCurrency(dayExpenses), [dayExpenses]);
   const monthTotals = useMemo(() => sumByCurrency(monthExpenses), [monthExpenses]);
 
-  // The biggest currency of the day as a share of the same currency's month total (for the ring).
   const share = useMemo(() => {
     const first = dayTotals[0];
     if (!first) return 0;
@@ -133,35 +130,25 @@ export default function HomeScreen() {
   };
 
   const syncLabel = sync.syncing
-    ? 'Syncing...'
+    ? 'Syncing with Google Drive...'
     : sync.signedIn
-      ? sync.error
-        ? 'Could not sync. Will try again.'
-        : sync.paused
-          ? 'Cloud sync paused'
-          : 'Synced to Google Drive'
-      : sync.error
-        ? 'Google sign-in expired. Open Settings to sign in again.'
-        : 'Saved on this device only';
+    ? `Synced (${sync.email ?? 'Google account'})`
+    : 'Local only (not signed in)';
 
-  const arrow =
-    'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 active:opacity-60 dark:bg-zinc-800';
+  const arrow = 'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800';
 
   return (
-    <SafeAreaView className="flex-1">
-      <View className="w-full max-w-2xl flex-1 self-center px-5" {...pan.panHandlers}>
-        <View className="flex-row items-center justify-between py-4">
-          <View className="flex-row items-center gap-2">
-            <Logo size={36} color={a.accent} />
-            <Text className="text-3xl font-bold text-accent">eTrak</Text>
-          </View>
+    <SafeAreaView className="flex-1 bg-white dark:bg-black">
+      <View {...pan.panHandlers} className="flex-1 px-5 pt-3">
+        <View className="mb-4 flex-row items-center justify-between">
+          <Logo />
           <View className="flex-row items-center gap-2">
             {day !== today ? (
               <Pressable
                 onPress={() => setDay(today)}
-                className="rounded-full bg-zinc-200 px-3 py-2 active:opacity-60 dark:bg-zinc-800"
+                className="rounded-full bg-zinc-200 px-3 py-1.5 dark:bg-zinc-800 active:opacity-70"
               >
-                <Text className="text-sm text-zinc-800 dark:text-zinc-200">Today</Text>
+                <Text className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Today</Text>
               </Pressable>
             ) : null}
             <Pressable onPress={() => setCalendarOpen(true)} className={arrow}>
@@ -169,6 +156,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
+
         <Text className="-mt-3 pb-3 text-xs text-zinc-500 dark:text-zinc-400">{syncLabel}</Text>
 
         <DbErrorBanner error={error} />
@@ -183,76 +171,74 @@ export default function HomeScreen() {
               {weekdayName(day)}
             </Text>
             <Text className="text-2xl font-bold text-zinc-900 dark:text-white">
-              {shortDateLabel(day)}
+              {monthLabel(day)}
             </Text>
-            <Text className="text-xs text-zinc-500 dark:text-zinc-400">{relativeDayTag(day)}</Text>
           </Pressable>
           <Pressable onPress={() => stepDay(1)} className={arrow}>
             <Text className="text-xl text-zinc-800 dark:text-zinc-200">›</Text>
           </Pressable>
         </View>
 
-        {dayTotals.length > 0 ? (
-          <View
-            className="mb-2 flex-row items-center gap-4 rounded-2xl border bg-zinc-100 p-4 dark:bg-zinc-900"
-            style={{ borderColor: a.tint(0.35), boxShadow: `0 0 18px ${a.tint(0.18)}` }}
-          >
-            <GradientRing progress={share} size={112} stroke={10}>
-              <Text className="text-lg font-bold text-zinc-900 dark:text-white">
-                {Math.round(share * 100)}%
-              </Text>
-              <Text className="text-[10px] text-zinc-500 dark:text-zinc-400">of month</Text>
-            </GradientRing>
-            <View className="flex-1 gap-1">
-              <Text className="text-xs uppercase text-zinc-500 dark:text-zinc-400">
-                {day > today ? 'Planned' : 'Spent'} on this day · {dayExpenses.length}{' '}
-                {dayExpenses.length === 1 ? 'expense' : 'expenses'}
-              </Text>
-              {dayTotals.map(([code, minor]) => (
-                <Text key={code} className="text-2xl font-bold text-zinc-900 dark:text-white">
-                  {formatMinor(minor, code)}
-                </Text>
-              ))}
+        <View className="my-2 items-center justify-center">
+          <GradientRing progress={share} size={150} strokeWidth={10}>
+            <View className="items-center">
+              {dayTotals.length === 0 ? (
+                <Text className="text-sm text-zinc-400">No spending</Text>
+              ) : (
+                dayTotals.map(([cur, minor]) => (
+                  <Text key={cur} className="text-2xl font-black text-zinc-900 dark:text-white">
+                    {formatMinor(minor, cur)}
+                  </Text>
+                ))
+              )}
+              <Text className="text-xs text-zinc-500 dark:text-zinc-400">Total today</Text>
             </View>
-          </View>
-        ) : null}
+          </GradientRing>
+        </View>
 
-        <Text className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-          {monthLabel(y, m)}:{' '}
-          {monthTotals.length
-            ? monthTotals.map(([c, n]) => formatMinor(n, c)).join(' · ')
-            : 'no expenses'}
-        </Text>
+        <View className="mb-2 flex-row items-center justify-between pt-3">
+          <Text className="text-sm font-bold uppercase tracking-wider text-zinc-500">Expenses</Text>
+          <Pressable
+            onPress={openNew}
+            className="flex-row items-center gap-1.5 rounded-full bg-accent px-4 py-2 shadow-sm active:opacity-80"
+          >
+            <Text className="text-base font-bold text-white">+</Text>
+            <Text className="text-sm font-bold text-white">Add</Text>
+          </Pressable>
+        </View>
 
         <FlatList
           data={dayExpenses}
-          keyExtractor={(e) => e.id}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 80 }}
           ListEmptyComponent={
-            <Text className="pt-10 text-center text-zinc-500 dark:text-zinc-400">
-              {day > today
-                ? 'Nothing planned for this day. Tap + to add a future expense.'
-                : 'No expenses on this day. Tap + to add one.'}
-            </Text>
+            <View className="items-center py-12">
+              <Text className="text-zinc-400">No expenses recorded for this day</Text>
+              <Pressable onPress={openNew} className="mt-3">
+                <Text className="font-semibold text-accent">+ Add first expense</Text>
+              </Pressable>
+            </View>
           }
-          renderItem={({ item: e }) => {
-            const cat = categoryById.get(e.categoryId);
+          renderItem={({ item }) => {
+            const cat = categoryById.get(item.categoryId);
             return (
               <Pressable
-                onPress={() => openEdit(e)}
-                className="flex-row items-center gap-3 border-b border-zinc-200 py-3 active:opacity-60 dark:border-zinc-800"
+                onPress={() => openEdit(item)}
+                className="mb-2.5 flex-row items-center justify-between rounded-2xl bg-zinc-100 p-4 dark:bg-zinc-900 active:opacity-70"
               >
-                <Text className="text-2xl">{categoryEmoji(cat)}</Text>
-                <View className="flex-1">
-                  <Text className="text-base font-medium text-zinc-900 dark:text-zinc-100">
-                    {cat?.name ?? 'Unknown'}
-                  </Text>
-                  {e.note ? (
-                    <Text className="text-sm text-zinc-500 dark:text-zinc-400">{e.note}</Text>
-                  ) : null}
+                <View className="flex-row items-center gap-3">
+                  <Text className="text-2xl">{categoryEmoji(cat)}</Text>
+                  <View>
+                    <Text className="font-bold text-zinc-900 dark:text-white">
+                      {cat?.name ?? 'General'}
+                    </Text>
+                    {item.note ? (
+                      <Text className="text-xs text-zinc-500 dark:text-zinc-400">{item.note}</Text>
+                    ) : null}
+                  </View>
                 </View>
-                <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                  {formatMinor(e.amountMinor, e.currency)}
+                <Text className="text-base font-bold text-zinc-900 dark:text-white">
+                  {formatMinor(item.amountMinor, item.currency)}
                 </Text>
               </Pressable>
             );
@@ -260,26 +246,18 @@ export default function HomeScreen() {
         />
       </View>
 
-      <Pressable
-        onPress={openNew}
-        className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-accent"
-        style={{ boxShadow: `0 0 20px ${a.glow}` }}
-      >
-        <Text className="text-3xl text-on-accent">+</Text>
-      </Pressable>
-
       <ExpenseSheet
         visible={sheetOpen}
         categories={categories}
         expense={editing}
         initialDate={day}
-        onCategoriesChanged={refresh}
         onClose={() => setSheetOpen(false)}
-        onSaved={(savedDate) => {
+        onSaved={(d) => {
           setSheetOpen(false);
-          if (savedDate) setDay(savedDate);
+          if (d) setDay(d);
           refresh();
         }}
+        onCategoriesChanged={refresh}
       />
 
       <CalendarPopup
