@@ -61,9 +61,8 @@ function watchWrites(db: SQLiteDatabase) {
       const sql = typeof args[0] === 'string' ? args[0] : '';
       if (WRITE.test(sql) && bus.suppressed === 0) {
         const touchesData = /\b(expenses|categories)\b/i.test(sql);
-        const touchesMainCurrency =
-          /\bsettings\b/i.test(sql) && JSON.stringify(args.slice(1)).includes('main_currency');
-        if (touchesData || touchesMainCurrency) notifyDataChanged();
+        const touchesTheme = /\bsettings\b/i.test(sql);
+        if (touchesData || touchesTheme) notifyDataChanged();
       }
       return result;
     };
@@ -71,7 +70,7 @@ function watchWrites(db: SQLiteDatabase) {
   } catch {}
 }
 
-async function openWithRetry(name: string, retries = 5, delay = 200): Promise<SQLiteDatabase> {
+async function openWithRetry(name: string, retries = 10, delay = 250): Promise<SQLiteDatabase> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -85,12 +84,6 @@ async function openWithRetry(name: string, retries = 5, delay = 200): Promise<SQ
       }
       throw err;
     }
-  }
-
-  // Fallback for Web multi-tab OPFS lock contention: open a non-colliding tab-scoped instance
-  if (Platform.OS === 'web') {
-    const tabFallback = `etrak_tab_${Math.random().toString(36).substring(2, 8)}.db`;
-    return await openDatabaseAsync(tabFallback);
   }
   throw lastError;
 }
