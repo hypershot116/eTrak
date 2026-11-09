@@ -2,8 +2,6 @@ import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -19,6 +17,7 @@ import { getSetting, setSetting } from '@/db/settings-repo';
 import { categoryLabel } from '@/lib/category-display';
 import { currencies, getCurrency } from '@/lib/currencies';
 import {
+  addDays,
   dateInputToMs,
   dayOffset,
   relativeDayTag,
@@ -222,94 +221,120 @@ export function ExpenseSheet({
   };
 
   const chip = (active: boolean) =>
-    `rounded-full px-3 py-1.5 ${active ? 'bg-accent' : 'bg-zinc-800'}`;
+    `rounded-full px-3.5 py-2 ${active ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'}`;
   const chipText = (active: boolean) =>
-    active ? 'text-white font-semibold' : 'text-zinc-300';
+    `text-sm ${active ? 'text-white font-bold' : 'text-zinc-800 dark:text-zinc-200 font-medium'}`;
 
   return (
-    <View
-      style={{
-        position: 'fixed' as any,
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        zIndex: 999999,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-      }}
+    <ScrollView
+      className="flex-1 w-full"
+      contentContainerStyle={{ paddingBottom: 48 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
-      <Pressable
-        style={{
-          position: 'absolute' as any,
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
-        onPress={onClose}
-      />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{
-          width: '100%',
-          maxWidth: 540,
-          maxHeight: '88vh' as any,
-          zIndex: 1000000,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <ScrollView
-          style={{
-            width: '100%',
-            backgroundColor: '#121214',
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            borderWidth: 1,
-            borderColor: '#27272a',
-          }}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingTop: 20,
-            paddingBottom: 40,
-            gap: 16,
-          }}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-        >
-          <View className="flex-row items-center justify-between pb-2 border-b border-zinc-800">
-            <Text className="text-lg font-bold text-white">
-              {isEdit ? 'Edit expense' : 'New expense'}
+      <View className="w-full rounded-3xl border border-zinc-200 bg-zinc-100/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/90 gap-4">
+        {/* Top Header Row */}
+        <View className="flex-row items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-800">
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={onClose}
+              className="rounded-full bg-zinc-200 px-3 py-1.5 dark:bg-zinc-800 active:opacity-70"
+            >
+              <Text className="text-sm font-bold text-zinc-800 dark:text-zinc-200">← Back</Text>
+            </Pressable>
+            <Text className="text-lg font-bold text-zinc-900 dark:text-white">
+              {isEdit ? 'Edit Expense' : 'New Expense'}
             </Text>
-            <Pressable hitSlop={14} onPress={onClose} className="p-1.5 rounded-full active:opacity-60">
-              <Text className="text-xl text-zinc-400 font-bold leading-none">✕</Text>
+          </View>
+          <Pressable
+            hitSlop={12}
+            onPress={onClose}
+            className="h-8 w-8 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 active:opacity-60"
+          >
+            <Text className="text-sm font-bold text-zinc-600 dark:text-zinc-300">✕</Text>
+          </Pressable>
+        </View>
+
+        {/* Amount Input Box (minWidth: 0 prevents HTML input overflow) */}
+        <View>
+          <Text className="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Amount
+          </Text>
+          <View className="w-full flex-row items-center overflow-hidden rounded-2xl border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950">
+            <Text className="mr-3 text-xl font-extrabold text-accent">
+              {cur.code}
+            </Text>
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder={cur.digits === 0 ? '0' : '0.00'}
+              placeholderTextColor="#71717a"
+              keyboardType="decimal-pad"
+              onSubmitEditing={save}
+              style={{ flex: 1, minWidth: 0, width: '100%' }}
+              className="text-2xl font-black text-zinc-900 dark:text-white"
+            />
+          </View>
+        </View>
+
+        {/* Wrapped Currency Selector Grid */}
+        <View>
+          <Text className="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Currency
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {currencies.map((c) => (
+              <Pressable
+                key={c.code}
+                onPress={() => setCurrency(c.code)}
+                className={chip(currency === c.code)}
+              >
+                <Text className={chipText(currency === c.code)}>{c.code}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Date Selector & Quick Day Pills */}
+        <View className="gap-2">
+          <Text className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Date
+          </Text>
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={() => setDateText((d) => addDays(d, -1))}
+              className="h-12 w-10 items-center justify-center rounded-2xl border border-zinc-300 bg-white dark:border-zinc-800 dark:bg-zinc-950 active:opacity-70"
+            >
+              <Text className="text-lg font-bold text-zinc-700 dark:text-zinc-300">‹</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setCalendarOpen(true)}
+              className="flex-1 flex-row items-center gap-3 rounded-2xl border border-zinc-300 bg-white px-3.5 py-2.5 dark:border-zinc-800 dark:bg-zinc-950 active:opacity-70"
+            >
+              <CalendarIcon size={20} />
+              <View className="flex-1" style={{ minWidth: 0 }}>
+                <Text className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                  {weekdayName(dateText)}
+                </Text>
+                <Text className="text-base font-bold text-zinc-900 dark:text-white">
+                  {shortDateLabel(dateText)}
+                </Text>
+              </View>
+              <Text className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                {relativeDayTag(dateText)}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setDateText((d) => addDays(d, 1))}
+              className="h-12 w-10 items-center justify-center rounded-2xl border border-zinc-300 bg-white dark:border-zinc-800 dark:bg-zinc-950 active:opacity-70"
+            >
+              <Text className="text-lg font-bold text-zinc-700 dark:text-zinc-300">›</Text>
             </Pressable>
           </View>
 
-          <Pressable
-            onPress={() => setCalendarOpen(true)}
-            className="flex-row items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 active:opacity-70"
-          >
-            <CalendarIcon size={24} />
-            <View className="flex-1">
-              <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
-                {weekdayName(dateText)}
-              </Text>
-              <Text className="text-lg font-bold text-white">
-                {shortDateLabel(dateText)}
-              </Text>
-            </View>
-            <Text className="text-xs text-zinc-400">
-              {relativeDayTag(dateText)}
-            </Text>
-          </Pressable>
-
-          <View className="flex-row gap-2">
+          <View className="flex-row flex-wrap gap-2 pt-1">
             <Pressable onPress={() => setDateText(yesterday)} className={chip(dateText === yesterday)}>
               <Text className={chipText(dateText === yesterday)}>Yesterday</Text>
             </Pressable>
@@ -320,35 +345,13 @@ export function ExpenseSheet({
               <Text className={chipText(dateText === tomorrow)}>Tomorrow</Text>
             </Pressable>
           </View>
+        </View>
 
-          <View className="flex-row items-center gap-3 py-1">
-            <Text className="text-2xl font-bold text-zinc-400">{cur.code}</Text>
-            <TextInput
-              value={amount}
-              onChangeText={setAmount}
-              placeholder={cur.digits === 0 ? '0' : '0.00'}
-              placeholderTextColor="#52525b"
-              keyboardType="decimal-pad"
-              autoFocus
-              onSubmitEditing={save}
-              className="flex-1 text-3xl font-bold text-white"
-            />
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-1">
-            <View className="flex-row gap-2">
-              {currencies.map((c) => (
-                <Pressable
-                  key={c.code}
-                  onPress={() => setCurrency(c.code)}
-                  className={chip(currency === c.code)}
-                >
-                  <Text className={chipText(currency === c.code)}>{c.code}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-
+        {/* Category Selector */}
+        <View>
+          <Text className="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Category
+          </Text>
           <View className="flex-row flex-wrap gap-2">
             {allCats.map((c) => (
               <Pressable
@@ -366,99 +369,110 @@ export function ExpenseSheet({
                 setCreating((v) => !v);
                 setCatError(null);
               }}
-              className="rounded-full border border-dashed border-zinc-700 px-3 py-1.5"
+              className="rounded-full border border-dashed border-zinc-400 px-3.5 py-2 dark:border-zinc-600"
             >
-              <Text className="text-accent">{creating ? 'Cancel' : '+ New category'}</Text>
-            </Pressable>
-          </View>
-
-          {creating ? (
-            <View className="gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3">
-              <View className="flex-row items-center gap-2">
-                <Text className="w-9 text-center text-3xl text-zinc-400">{newEmoji || '•'}</Text>
-                <TextInput
-                  value={newName}
-                  onChangeText={setNewName}
-                  placeholder="New category name"
-                  placeholderTextColor="#71717a"
-                  maxLength={20}
-                  autoFocus
-                  onSubmitEditing={createFromForm}
-                  className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-base text-white"
-                />
-                <Pressable
-                  onPress={createFromForm}
-                  disabled={catBusy}
-                  className="rounded-xl bg-accent px-4 py-2"
-                >
-                  <Text className="font-semibold text-white">{catBusy ? '...' : 'Add'}</Text>
-                </Pressable>
-              </View>
-              {typedName ? (
-                <Text className="text-xs text-accent">
-                  Will save under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
-                </Text>
-              ) : null}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-1.5">
-                  {categoryEmojis.map((e) => (
-                    <Pressable
-                      key={e}
-                      onPress={() => setNewEmoji(newEmoji === e ? '' : e)}
-                      className={`h-10 w-10 items-center justify-center rounded-xl ${
-                        newEmoji === e ? 'bg-accent' : 'bg-zinc-800'
-                      }`}
-                    >
-                      <Text className="text-xl">{e}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-              {catError ? <Text className="text-sm text-red-500">{catError}</Text> : null}
-            </View>
-          ) : null}
-
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            placeholder="Note (optional)"
-            placeholderTextColor="#71717a"
-            maxLength={200}
-            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 text-base text-white"
-          />
-
-          {error ? <Text className="text-sm text-red-500">{error}</Text> : null}
-
-          <View className="flex-row gap-3 pt-2">
-            {isEdit ? (
-              <Pressable
-                onPress={remove}
-                disabled={saving}
-                className={`items-center justify-center rounded-2xl px-5 py-3 ${
-                  confirmDelete ? 'bg-red-500' : 'bg-red-500/15'
-                }`}
-              >
-                <Text
-                  className={`text-base font-semibold ${
-                    confirmDelete ? 'text-white' : 'text-red-500'
-                  }`}
-                >
-                  {confirmDelete ? 'Confirm delete' : 'Delete'}
-                </Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={save}
-              disabled={saving}
-              className="flex-1 items-center rounded-2xl bg-accent py-3 shadow-sm active:opacity-80"
-            >
-              <Text className="text-base font-semibold text-white">
-                {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Save expense'}
+              <Text className="text-sm font-semibold text-accent">
+                {creating ? 'Cancel' : '+ New category'}
               </Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+
+        {/* Inline New Category Creator */}
+        {creating ? (
+          <View className="gap-3 rounded-2xl border border-zinc-300 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <View className="w-full flex-row items-center gap-2">
+              <Text className="w-8 text-center text-2xl text-zinc-400">{newEmoji || '•'}</Text>
+              <TextInput
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="New category name"
+                placeholderTextColor="#71717a"
+                maxLength={20}
+                onSubmitEditing={createFromForm}
+                style={{ flex: 1, minWidth: 0, width: '100%' }}
+                className="rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              />
+              <Pressable
+                onPress={createFromForm}
+                disabled={catBusy}
+                className="rounded-xl bg-accent px-4 py-2"
+              >
+                <Text className="font-semibold text-white">{catBusy ? '...' : 'Add'}</Text>
+              </Pressable>
+            </View>
+            {typedName ? (
+              <Text className="text-xs text-accent">
+                Will save under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
+              </Text>
+            ) : null}
+            <View className="flex-row flex-wrap gap-1.5">
+              {categoryEmojis.map((e) => (
+                <Pressable
+                  key={e}
+                  onPress={() => setNewEmoji(newEmoji === e ? '' : e)}
+                  className={`h-9 w-9 items-center justify-center rounded-xl ${
+                    newEmoji === e ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
+                  }`}
+                >
+                  <Text className="text-lg">{e}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {catError ? <Text className="text-sm text-red-500">{catError}</Text> : null}
+          </View>
+        ) : null}
+
+        {/* Note Input */}
+        <View>
+          <Text className="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Note
+          </Text>
+          <View className="w-full overflow-hidden rounded-2xl border border-zinc-300 bg-white px-3.5 py-2.5 dark:border-zinc-800 dark:bg-zinc-950">
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="Note (optional)"
+              placeholderTextColor="#71717a"
+              maxLength={200}
+              style={{ minWidth: 0, width: '100%' }}
+              className="text-base text-zinc-900 dark:text-white"
+            />
+          </View>
+        </View>
+
+        {error ? <Text className="text-sm font-medium text-red-500">{error}</Text> : null}
+
+        {/* Action Buttons */}
+        <View className="flex-row gap-3 pt-2">
+          {isEdit ? (
+            <Pressable
+              onPress={remove}
+              disabled={saving}
+              className={`items-center justify-center rounded-2xl px-5 py-3.5 ${
+                confirmDelete ? 'bg-red-500' : 'bg-red-500/15'
+              }`}
+            >
+              <Text
+                className={`text-base font-bold ${
+                  confirmDelete ? 'text-white' : 'text-red-500'
+                }`}
+              >
+                {confirmDelete ? 'Confirm delete' : 'Delete'}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={save}
+            disabled={saving}
+            className="flex-1 items-center justify-center rounded-2xl bg-accent py-3.5 shadow-sm active:opacity-80"
+          >
+            <Text className="text-base font-bold text-white">
+              {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Save expense'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
 
       <CalendarPopup
         visible={calendarOpen}
@@ -466,6 +480,6 @@ export function ExpenseSheet({
         onSelect={(d) => setDateText(d)}
         onClose={() => setCalendarOpen(false)}
       />
-    </View>
+    </ScrollView>
   );
 }
