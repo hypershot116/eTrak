@@ -10,8 +10,8 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
+import ReactDOM from 'react-dom';
 
 import { CalendarPopup } from '@/components/calendar-popup';
 import { CalendarIcon } from '@/components/icons';
@@ -50,7 +50,6 @@ export function ExpenseSheet({
   onSaved,
   onCategoriesChanged,
 }: Props) {
-  const { height: screenHeight } = useWindowDimensions();
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -229,48 +228,77 @@ export function ExpenseSheet({
   const chipText = (active: boolean) =>
     active ? 'text-white' : 'text-zinc-800 dark:text-zinc-200';
 
-  const modalMaxHeight = Platform.OS === 'web' ? 'min(88dvh, 760px)' : screenHeight * 0.88;
-
-  const content = (
+  const sheetContent = (
     <View
-      className="flex-1 justify-end bg-black/60"
-      style={Platform.OS === 'web' ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 } : undefined}
+      style={{
+        position: Platform.OS === 'web' ? ('fixed' as any) : 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        zIndex: 99999,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+      }}
     >
-      <Pressable className="flex-1" onPress={onClose} />
+      <Pressable
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        onPress={onClose}
+      />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ maxHeight: modalMaxHeight as any, width: '100%' }}
+        style={{
+          width: '100%',
+          maxWidth: 580,
+          maxHeight: Platform.OS === 'web' ? '88vh' : '88%',
+          zIndex: 100000,
+        }}
       >
         <ScrollView
-          className="w-full max-w-lg self-center rounded-t-3xl bg-white dark:bg-zinc-900 shadow-2xl"
-          style={{ maxHeight: modalMaxHeight as any }}
-          contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: Platform.OS === 'web' ? 36 : 28 }}
+          style={{
+            width: '100%',
+            backgroundColor: '#18181b',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+          }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: 36,
+            gap: 16,
+          }}
           keyboardShouldPersistTaps="handled"
           bounces={false}
         >
-          <View className="flex-row items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
-            <Text className="text-lg font-semibold text-zinc-900 dark:text-white">
+          <View className="flex-row items-center justify-between pb-1 border-b border-zinc-800">
+            <Text className="text-lg font-semibold text-white">
               {isEdit ? 'Edit expense' : 'New expense'}
             </Text>
             <Pressable hitSlop={12} onPress={onClose} className="p-1 rounded-full active:opacity-60">
-              <Text className="text-xl text-zinc-500 font-bold leading-none">✕</Text>
+              <Text className="text-xl text-zinc-400 font-bold leading-none">✕</Text>
             </Pressable>
           </View>
 
           <Pressable
             onPress={() => setCalendarOpen(true)}
-            className="flex-row items-center gap-3 rounded-2xl border border-zinc-300 px-4 py-2.5 active:opacity-70 dark:border-zinc-700"
+            className="flex-row items-center gap-3 rounded-2xl border border-zinc-700 px-4 py-2.5 active:opacity-70"
           >
             <CalendarIcon size={24} />
             <View className="flex-1">
               <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
                 {weekdayName(dateText)}
               </Text>
-              <Text className="text-lg font-bold text-zinc-900 dark:text-white">
+              <Text className="text-lg font-bold text-white">
                 {shortDateLabel(dateText)}
               </Text>
             </View>
-            <Text className="text-xs text-zinc-500 dark:text-zinc-400">
+            <Text className="text-xs text-zinc-400">
               {relativeDayTag(dateText)}
             </Text>
           </Pressable>
@@ -293,11 +321,11 @@ export function ExpenseSheet({
               value={amount}
               onChangeText={setAmount}
               placeholder={cur.digits === 0 ? '0' : '0.00'}
-              placeholderTextColor="#a1a1aa"
+              placeholderTextColor="#71717a"
               keyboardType="decimal-pad"
               autoFocus
               onSubmitEditing={save}
-              className="flex-1 text-3xl font-bold text-zinc-900 dark:text-white"
+              className="flex-1 text-3xl font-bold text-white"
             />
           </View>
 
@@ -332,25 +360,25 @@ export function ExpenseSheet({
                 setCreating((v) => !v);
                 setCatError(null);
               }}
-              className="rounded-full border border-dashed border-zinc-400 px-3 py-1.5 dark:border-zinc-600"
+              className="rounded-full border border-dashed border-zinc-600 px-3 py-1.5"
             >
               <Text className="text-accent">{creating ? 'Cancel' : '+ New category'}</Text>
             </Pressable>
           </View>
 
           {creating ? (
-            <View className="gap-3 rounded-2xl border border-zinc-300 p-3 dark:border-zinc-700">
+            <View className="gap-3 rounded-2xl border border-zinc-700 p-3">
               <View className="flex-row items-center gap-2">
                 <Text className="w-9 text-center text-3xl text-zinc-400">{newEmoji || '•'}</Text>
                 <TextInput
                   value={newName}
                   onChangeText={setNewName}
                   placeholder="New category name"
-                  placeholderTextColor="#a1a1aa"
+                  placeholderTextColor="#71717a"
                   maxLength={20}
                   autoFocus
                   onSubmitEditing={createFromForm}
-                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-700 px-3 py-2 text-base text-white"
                 />
                 <Pressable
                   onPress={createFromForm}
@@ -372,7 +400,7 @@ export function ExpenseSheet({
                       key={e}
                       onPress={() => setNewEmoji(newEmoji === e ? '' : e)}
                       className={`h-10 w-10 items-center justify-center rounded-xl ${
-                        newEmoji === e ? 'bg-accent' : 'bg-zinc-200 dark:bg-zinc-800'
+                        newEmoji === e ? 'bg-accent' : 'bg-zinc-800'
                       }`}
                     >
                       <Text className="text-xl">{e}</Text>
@@ -388,9 +416,9 @@ export function ExpenseSheet({
             value={note}
             onChangeText={setNote}
             placeholder="Note (optional)"
-            placeholderTextColor="#a1a1aa"
+            placeholderTextColor="#71717a"
             maxLength={200}
-            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
+            className="rounded-xl border border-zinc-700 px-3 py-2.5 text-base text-white"
           />
 
           {error ? <Text className="text-sm text-red-500">{error}</Text> : null}
@@ -435,11 +463,13 @@ export function ExpenseSheet({
     </View>
   );
 
-  return Platform.OS === 'web' ? (
-    content
-  ) : (
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    return ReactDOM.createPortal(sheetContent, document.body);
+  }
+
+  return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {content}
+      {sheetContent}
     </Modal>
   );
 }

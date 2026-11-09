@@ -2,7 +2,7 @@ import type { Category, Expense } from '@etrak/shared';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, PanResponder, Pressable, Text, View } from 'react-native';
+import { FlatList, PanResponder, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarPopup } from '@/components/calendar-popup';
@@ -141,8 +141,12 @@ export default function HomeScreen() {
   const arrow = 'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 active:opacity-60';
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-black">
-      <View {...pan.panHandlers} className="flex-1 w-full max-w-xl mx-auto px-5 pt-3">
+    <SafeAreaView className="flex-1 bg-white dark:bg-black items-center">
+      <View
+        {...pan.panHandlers}
+        className="flex-1 w-full px-5 pt-3"
+        style={Platform.OS === 'web' ? { maxWidth: 640, width: '100%' } : { width: '100%' }}
+      >
         <View className="mb-4 flex-row items-center justify-between">
           <Logo />
           <View className="flex-row items-center gap-2">
