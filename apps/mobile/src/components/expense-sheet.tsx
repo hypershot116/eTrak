@@ -3,12 +3,14 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { CalendarPopup } from '@/components/calendar-popup';
@@ -32,11 +34,11 @@ import { parseAmountToMinor } from '@/lib/money';
 type Props = {
   visible: boolean;
   categories: Category[];
-  expense: Expense | null; // null = new expense, otherwise edit this one
-  initialDate?: string; // YYYY-MM-DD, used for new expenses (the day being viewed)
+  expense: Expense | null;
+  initialDate?: string;
   onClose: () => void;
-  onSaved: (savedDate: string | null) => void; // null when the expense was deleted
-  onCategoriesChanged?: () => void; // called after a category is created from the sheet
+  onSaved: (savedDate: string | null) => void;
+  onCategoriesChanged?: () => void;
 };
 
 export function ExpenseSheet({
@@ -48,6 +50,7 @@ export function ExpenseSheet({
   onSaved,
   onCategoriesChanged,
 }: Props) {
+  const { height: screenHeight } = useWindowDimensions();
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -58,11 +61,10 @@ export function ExpenseSheet({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Categories created from inside this sheet (shown at once, before the parent reloads)
   const [extra, setExtra] = useState<Category[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newEmoji, setNewEmoji] = useState(''); // empty = no emoji (optional)
+  const [newEmoji, setNewEmoji] = useState('');
   const [catError, setCatError] = useState<string | null>(null);
   const [catBusy, setCatBusy] = useState(false);
 
@@ -99,7 +101,6 @@ export function ExpenseSheet({
       const preferred = c ?? (await getSetting('main_currency'));
       if (preferred) setCurrency(preferred);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, expense]);
 
   if (!visible) return null;
@@ -110,8 +111,6 @@ export function ExpenseSheet({
   const tomorrow = dayOffset(1);
   const typedName = newName.trim();
 
-  // Creates the category typed in the inline form (or selects the existing one with that name).
-  // Returns the category, or null if it could not be created.
   const createFromForm = async (): Promise<Category | null> => {
     if (!typedName) {
       setCatError('Enter a name');
@@ -151,7 +150,6 @@ export function ExpenseSheet({
       return;
     }
 
-    // If a new category was typed but not added yet, create it now and use it.
     let chosenCategoryId = categoryId;
     if (creating && typedName) {
       const created = await createFromForm();
@@ -163,7 +161,6 @@ export function ExpenseSheet({
       return;
     }
 
-    // Date: keep the original timestamp if the date wasn't changed. Any date is allowed, including the future.
     let spentAt: number;
     if (expense && dateText === toDateInput(expense.spentAt)) {
       spentAt = expense.spentAt;
@@ -232,38 +229,44 @@ export function ExpenseSheet({
   const chipText = (active: boolean) =>
     active ? 'text-white' : 'text-zinc-800 dark:text-zinc-200';
 
-  return (
-    <View className="absolute inset-0 z-10 justify-end bg-black/40">
+  const modalMaxHeight = Platform.OS === 'web' ? 'min(88dvh, 760px)' : screenHeight * 0.88;
+
+  const content = (
+    <View
+      className="flex-1 justify-end bg-black/60"
+      style={Platform.OS === 'web' ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 } : undefined}
+    >
       <Pressable className="flex-1" onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ maxHeight: '92%' }}
+        style={{ maxHeight: modalMaxHeight as any, width: '100%' }}
       >
         <ScrollView
-          className="w-full max-w-xl self-center rounded-t-3xl bg-white dark:bg-zinc-900"
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ padding: 20, gap: 16 }}
+          className="w-full max-w-lg self-center rounded-t-3xl bg-white dark:bg-zinc-900 shadow-2xl"
+          style={{ maxHeight: modalMaxHeight as any }}
+          contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: Platform.OS === 'web' ? 36 : 28 }}
           keyboardShouldPersistTaps="handled"
+          bounces={false}
         >
-          <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
             <Text className="text-lg font-semibold text-zinc-900 dark:text-white">
               {isEdit ? 'Edit expense' : 'New expense'}
             </Text>
-            <Pressable onPress={onClose}>
-              <Text className="text-xl text-zinc-500">✕</Text>
+            <Pressable hitSlop={12} onPress={onClose} className="p-1 rounded-full active:opacity-60">
+              <Text className="text-xl text-zinc-500 font-bold leading-none">✕</Text>
             </Pressable>
           </View>
 
           <Pressable
             onPress={() => setCalendarOpen(true)}
-            className="flex-row items-center gap-3 rounded-2xl border border-zinc-300 px-4 py-3 active:opacity-70 dark:border-zinc-700"
+            className="flex-row items-center gap-3 rounded-2xl border border-zinc-300 px-4 py-2.5 active:opacity-70 dark:border-zinc-700"
           >
-            <CalendarIcon size={26} />
+            <CalendarIcon size={24} />
             <View className="flex-1">
               <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
                 {weekdayName(dateText)}
               </Text>
-              <Text className="text-xl font-bold text-zinc-900 dark:text-white">
+              <Text className="text-lg font-bold text-zinc-900 dark:text-white">
                 {shortDateLabel(dateText)}
               </Text>
             </View>
@@ -284,8 +287,8 @@ export function ExpenseSheet({
             </Pressable>
           </View>
 
-          <View className="flex-row items-center gap-3">
-            <Text className="text-2xl font-semibold text-zinc-500">{cur.code}</Text>
+          <View className="flex-row items-center gap-3 py-1">
+            <Text className="text-2xl font-bold text-zinc-500">{cur.code}</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
@@ -294,11 +297,11 @@ export function ExpenseSheet({
               keyboardType="decimal-pad"
               autoFocus
               onSubmitEditing={save}
-              className="flex-1 text-4xl font-bold text-zinc-900 dark:text-white"
+              className="flex-1 text-3xl font-bold text-zinc-900 dark:text-white"
             />
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-1">
             <View className="flex-row gap-2">
               {currencies.map((c) => (
                 <Pressable
@@ -358,14 +361,10 @@ export function ExpenseSheet({
                 </Pressable>
               </View>
               {typedName ? (
-                <Text className="text-sm text-accent">
-                  This expense will be saved under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
-                  Press Add, or just press Save expense.
+                <Text className="text-xs text-accent">
+                  Will save under “{newEmoji ? `${newEmoji} ` : ''}{typedName}”.
                 </Text>
               ) : null}
-              <Text className="text-xs text-zinc-500 dark:text-zinc-400">
-                Emoji is optional. Tap one to choose it, tap it again to remove it.
-              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View className="flex-row gap-1.5">
                   {categoryEmojis.map((e) => (
@@ -391,12 +390,12 @@ export function ExpenseSheet({
             placeholder="Note (optional)"
             placeholderTextColor="#a1a1aa"
             maxLength={200}
-            className="rounded-xl border border-zinc-300 px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
+            className="rounded-xl border border-zinc-300 px-3 py-2.5 text-base text-zinc-900 dark:border-zinc-700 dark:text-white"
           />
 
           {error ? <Text className="text-sm text-red-500">{error}</Text> : null}
 
-          <View className="flex-row gap-3">
+          <View className="flex-row gap-3 pt-2">
             {isEdit ? (
               <Pressable
                 onPress={remove}
@@ -410,14 +409,14 @@ export function ExpenseSheet({
                     confirmDelete ? 'text-white' : 'text-red-500'
                   }`}
                 >
-                  {confirmDelete ? 'Tap again to delete' : 'Delete'}
+                  {confirmDelete ? 'Confirm delete' : 'Delete'}
                 </Text>
               </Pressable>
             ) : null}
             <Pressable
               onPress={save}
               disabled={saving}
-              className="flex-1 items-center rounded-2xl bg-accent py-3"
+              className="flex-1 items-center rounded-2xl bg-accent py-3 shadow-sm active:opacity-80"
             >
               <Text className="text-base font-semibold text-white">
                 {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Save expense'}
@@ -434,5 +433,13 @@ export function ExpenseSheet({
         onClose={() => setCalendarOpen(false)}
       />
     </View>
+  );
+
+  return Platform.OS === 'web' ? (
+    content
+  ) : (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {content}
+    </Modal>
   );
 }
