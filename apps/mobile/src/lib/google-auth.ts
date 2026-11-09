@@ -9,7 +9,6 @@ export type GoogleSession = { accessToken: string; expiresAt: number; email: str
 export const googleSupported = Platform.OS === 'web';
 export const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-// BroadcastChannel for instant multi-tab session coordination
 let authChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
   try {
@@ -53,7 +52,6 @@ function broadcastAuthUpdate() {
   }
 }
 
-// Sends the page to Google OAuth endpoint
 export function startGoogleSignIn() {
   if (!googleSupported || !googleClientId) return;
   const state = crypto.randomUUID();
@@ -72,36 +70,43 @@ export function startGoogleSignIn() {
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
-// Runs once at app start: parses the token returned by Google
 export async function captureGoogleRedirect() {
   if (!googleSupported || typeof window === 'undefined') return;
-  const hash = window.location.hash;
-  if (!hash.includes('access_token') && !hash.includes('error=')) return;
 
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  const rawHash = window.location.hash.replace(/^#/, '');
+  const rawSearch = window.location.search.replace(/^\?/, '');
+  
+  if (!rawHash.includes('access_token') && !rawSearch.includes('access_token')) {
+    return;
+  }
 
-  let expected: string | null = null;
-  try {
-    expected = localStorage.getItem(STATE_KEY) ?? sessionStorage.getItem(STATE_KEY);
-    localStorage.removeItem(STATE_KEY);
-    sessionStorage.removeItem(STATE_KEY);
-  } catch {}
-
+  const params = new URLSearchParams(rawHash.includes('access_token') ? rawHash : rawSearch);
   const token = params.get('access_token');
-  if (!token || !expected || params.get('state') !== expected) return;
+  if (!token) return;
+
+  // Clean the URL hash/search immediately so reload doesn't re-trigger
+  window.history.replaceState(null, '', window.location.pathname);
+
+  try {
+    localStorage.removeItem(STATE_KEY);
+  } catch {}
 
   const expiresAt = Date.now() + (Number(params.get('expires_in')) || 3600) * 1000;
   let email: string | null = null;
+  
   try {
     const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) email = (await res.json()).email ?? null;
+    if (res.ok) {
+      const data = await res.json();
+      email = data.email ?? null;
+    }
   } catch {}
 
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ accessToken: token, expiresAt, email }));
+    const session: GoogleSession = { accessToken: token, expiresAt, email };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     broadcastAuthUpdate();
   } catch {}
 }
