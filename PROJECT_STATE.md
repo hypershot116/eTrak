@@ -1,7 +1,7 @@
 # eTrak - Project State & Architecture
 
-**Last Updated:** November 6, 2026  
-**Current Version:** v0.5.0 (Release Candidate)  
+**Last Updated:** November 9, 2026  
+**Current Version:** v0.5.1 (Multi-Tab Web Concurrency & Auth Sync)  
 **Live Production URL:** https://etrak.pages.dev  
 **Distribution Artifact:** dist/eTrak-v0.5.0-release.apk  
 **Repository:** https://github.com/hypershot116/eTrak  
@@ -12,10 +12,11 @@
 
 eTrak follows a strict local-first paradigm with zero custodian backend servers.
 
-* **Local Storage Layer:** Encrypted local SQLite via `@expo-sqlite` and `op-sqlite`.
+* **Local Storage Layer:** Encrypted local SQLite via `@expo-sqlite` and `op-sqlite` with multi-tab VFS lock resilience.
 * **State Management:** React Native hooks, context providers, and localized synchronous persistence.
 * **Cloud Backup Layer:** Direct client-to-Google Drive synchronization via the isolated `appDataFolder` scope (`https://www.googleapis.com/auth/drive.appdata`). No central database has access to financial records.
 * **Web Hosting:** Cloudflare Pages with automated Git continuous deployment targeting the `main` branch.
+* **Multi-Tab Sync:** BroadcastChannel (`etrak_auth_sync`, `etrak_db_channel`) and persistent `localStorage` for cross-tab login & live budget synchronization.
 * **Android Packaging:** Standalone native release APK compiled locally using offline Gradle toolchains.
 
 ---
@@ -56,17 +57,21 @@ eTrak follows a strict local-first paradigm with zero custodian backend servers.
 - Added live domain (`etrak.pages.dev`) to Google Cloud Console Authorized JavaScript Origins and Authorized Redirect URIs.
 - Production web application verified and live.
 
-### Milestone v0.5.0 – Standalone Android Release Build (Current)
+### Milestone v0.5.0 – Standalone Android Release Build
 - Configured native Android toolchain on Ubuntu without reliance on third-party cloud build queues.
 - Resolved native NDK header definitions and `source.properties` structure.
 - Resolved Metro bundling conflict by hoisting `babel-preset-expo` to monorepo and workspace root.
 - Generated standalone production APK: `dist/eTrak-v0.5.0-release.apk`.
-- Updated recruiter-focused README with live web URL, architectural diagrams, testing instructions, and APK download links.
+
+### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth (Current)
+- Replaced tab-isolated `sessionStorage` with synchronized `localStorage` and `BroadcastChannel` auth notifications.
+- Resolved web `Invalid VFS state` SQLite lock error through exponential backoff retry and non-colliding fallback.
+- Added cross-tab transaction broadcast notifications to keep UI state unified across concurrent browser windows.
 
 ---
 
 ## 4. Immediate Next Tasks
 
-1. **Device Verification:** Sideload `dist/eTrak-v0.5.0-release.apk` to physical Android device via USB/ADB and confirm SQLite operations.
-2. **Version Control Finalization:** Commit local build configuration fixes and push release tag `v0.5.0` to remote `develop` and `main` branches.
-3. **Distribution Setup:** Upload release APK to GitHub Releases and Google Drive public download link.
+1. **Deploy to Cloudflare:** Merge `develop` into `main` and push to trigger automated deployment on `https://etrak.pages.dev`.
+2. **Multi-Tab Web Validation:** Open two tabs at `https://etrak.pages.dev`, log in on Tab 1, and verify Tab 2 reflects the account and database state without VFS errors.
+3. **Physical Device Installation:** Install `dist/eTrak-v0.5.0-release.apk` onto physical Android device.

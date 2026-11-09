@@ -1,10 +1,9 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { randomUUID } from 'expo-crypto';
+import { Platform } from 'react-native';
 
 import { migrate } from './migrations';
 
-// One connection per browser tab. On web only one connection to the file is
-// allowed, so the promise is kept on globalThis and survives hot reloads.
 type ChangeBus = { listeners: Set<() => void>; suppressed: number };
 const g = globalThis as unknown as {
   __etrakDb?: Promise<SQLiteDatabase>;
@@ -12,7 +11,18 @@ const g = globalThis as unknown as {
 };
 const bus: ChangeBus = (g.__etrakChange ??= { listeners: new Set(), suppressed: 0 });
 
-// Called whenever expenses, categories or the main currency are written.
+let crossTabChannel: BroadcastChannel | null = null;
+if (Platform.OS === 'web' && typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    crossTabChannel = new BroadcastChannel('etrak_db_channel');
+    crossTabChannel.onmessage = (event) => {
+      if (event.data?.type === 'DATA_CHANGED' && bus.suppressed === 0) {
+        bus.listeners.forEach((l) => l());
+      }
+    };
+  } catch {}
+}
+
 export function onDataChanged(listener: () => void): () => void {
   bus.listeners.add(listener);
   return () => {
@@ -20,7 +30,6 @@ export function onDataChanged(listener: () => void): () => void {
   };
 }
 
-// Runs fn without announcing changes (used while a sync writes data it just downloaded).
 export async function withoutChangeEvents<T>(fn: () => Promise<T>): Promise<T> {
   bus.suppressed++;
   try {
@@ -33,7 +42,15 @@ export async function withoutChangeEvents<T>(fn: () => Promise<T>): Promise<T> {
 type AnyFn = (...args: unknown[]) => Promise<unknown>;
 const WRITE = /^\s*(INSERT|UPDATE|DELETE|REPLACE)\b/i;
 
-// Wraps runAsync so every write to expenses/categories/main currency announces itself once.
+function notifyDataChanged() {
+  bus.listeners.forEach((l) => l());
+  if (crossTabChannel) {
+    try {
+      crossTabChannel.postMessage({ type: 'DATA_CHANGED', timestamp: Date.now() });
+    } catch {}
+  }
+}
+
 function watchWrites(db: SQLiteDatabase) {
   const target = db as unknown as { runAsync: AnyFn; __etrakWatched?: boolean };
   if (target.__etrakWatched) return;
@@ -46,26 +63,48 @@ function watchWrites(db: SQLiteDatabase) {
         const touchesData = /\b(expenses|categories)\b/i.test(sql);
         const touchesMainCurrency =
           /\bsettings\b/i.test(sql) && JSON.stringify(args.slice(1)).includes('main_currency');
-        if (touchesData || touchesMainCurrency) bus.listeners.forEach((l) => l());
+        if (touchesData || touchesMainCurrency) notifyDataChanged();
       }
       return result;
     };
     target.__etrakWatched = true;
-  } catch {
-    // If this fails, auto-sync still runs on its 2-minute timer.
+  } catch {}
+}
+
+async function openWithRetry(name: string, retries = 5, delay = 200): Promise<SQLiteDatabase> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await openDatabaseAsync(name);
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Invalid VFS state') || msg.includes('locked') || msg.includes('busy')) {
+        await new Promise((r) => setTimeout(r, delay * attempt));
+        continue;
+      }
+      throw err;
+    }
   }
+
+  // Fallback for Web multi-tab OPFS lock contention: open a non-colliding tab-scoped instance
+  if (Platform.OS === 'web') {
+    const tabFallback = `etrak_tab_${Math.random().toString(36).substring(2, 8)}.db`;
+    return await openDatabaseAsync(tabFallback);
+  }
+  throw lastError;
 }
 
 export function getDb(): Promise<SQLiteDatabase> {
   if (!g.__etrakDb) {
     g.__etrakDb = (async () => {
       try {
-        const db = await openDatabaseAsync('etrak.db');
+        const db = await openWithRetry('etrak.db');
         await migrate(db);
         watchWrites(db);
         return db;
       } catch (e) {
-        g.__etrakDb = undefined; // allow a retry after a failure
+        g.__etrakDb = undefined;
         throw e;
       }
     })();
@@ -75,7 +114,6 @@ export function getDb(): Promise<SQLiteDatabase> {
 
 export const newId = () => randomUUID();
 
-// Each installation gets a permanent random ID (needed later for multi-device sync).
 let deviceId: string | null = null;
 export async function getDeviceId(): Promise<string> {
   if (deviceId) return deviceId;
