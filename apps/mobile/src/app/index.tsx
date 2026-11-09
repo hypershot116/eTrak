@@ -57,7 +57,6 @@ export default function HomeScreen() {
     readSession();
   }, []);
 
-  // Make sync status vanish 4 seconds after initial sync or sign-in
   useEffect(() => {
     if (sync.signedIn && !sync.syncing) {
       const t = setTimeout(() => {
@@ -77,7 +76,10 @@ export default function HomeScreen() {
       setError(null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (!msg.includes('Invalid VFS state') && !msg.includes('locked')) {
+      // Explicitly handle browser OPFS locking instead of failing silently
+      if (msg.includes('Invalid VFS state') || msg.includes('locked') || msg.includes('busy')) {
+        setError('App is active in another tab. Your browser limits database access to one tab at a time. Please close this tab and use the active one.');
+      } else {
         setError(msg);
       }
     }
@@ -317,7 +319,7 @@ export default function HomeScreen() {
         }}
       >
         <Text className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-          v2.0.4
+          v2.0.5
         </Text>
       </View>
     </SafeAreaView>
