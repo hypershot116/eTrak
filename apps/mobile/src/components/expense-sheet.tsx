@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import ReactDOM from 'react-dom';
 
 import { CalendarPopup } from '@/components/calendar-popup';
 import { CalendarIcon } from '@/components/icons';
@@ -231,7 +232,6 @@ export function ExpenseSheet({
     <ScrollView
       style={{
         width: '100%',
-        maxWidth: 540,
         backgroundColor: '#121214',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
@@ -251,7 +251,7 @@ export function ExpenseSheet({
         <Text className="text-lg font-bold text-white">
           {isEdit ? 'Edit expense' : 'New expense'}
         </Text>
-        <Pressable hitSlop={12} onPress={onClose} className="p-1 rounded-full active:opacity-60">
+        <Pressable hitSlop={14} onPress={onClose} className="p-1.5 rounded-full active:opacity-60">
           <Text className="text-xl text-zinc-400 font-bold leading-none">✕</Text>
         </Pressable>
       </View>
@@ -425,22 +425,20 @@ export function ExpenseSheet({
     </ScrollView>
   );
 
-  // On Web: Render an absolute overlay centered via standard CSS coordinates
-  if (Platform.OS === 'web') {
-    return (
+  // Pure Web: Mounted directly to document.body via Portal with guaranteed centering
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    return ReactDOM.createPortal(
       <div
         style={{
           position: 'fixed',
           top: 0,
           left: 0,
+          right: 0,
+          bottom: 0,
           width: '100vw',
           height: '100dvh',
           backgroundColor: 'rgba(0, 0, 0, 0.75)',
           zIndex: 999999,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
           boxSizing: 'border-box',
           overflow: 'hidden',
         }}
@@ -451,19 +449,22 @@ export function ExpenseSheet({
             position: 'absolute',
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
+            right: 0,
+            bottom: 0,
             zIndex: 1,
           }}
         />
         <div
           style={{
+            position: 'absolute',
+            bottom: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
             width: '100%',
             maxWidth: '540px',
             maxHeight: '88dvh',
             display: 'flex',
             flexDirection: 'column',
-            margin: '0 auto',
             zIndex: 2,
             boxSizing: 'border-box',
           }}
@@ -477,11 +478,12 @@ export function ExpenseSheet({
           onSelect={(d) => setDateText(d)}
           onClose={() => setCalendarOpen(false)}
         />
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  // On Native Android/iOS: Native Modal
+  // Native iOS / Android Modal
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/75">
