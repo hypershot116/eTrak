@@ -47,6 +47,7 @@ export default function HomeScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSyncStatus, setShowSyncStatus] = useState(true);
   const sync = useSyncState();
 
   const today = dayOffset(0);
@@ -55,6 +56,16 @@ export default function HomeScreen() {
   useEffect(() => {
     readSession();
   }, []);
+
+  // Make sync status vanish 4 seconds after initial sync or sign-in
+  useEffect(() => {
+    if (sync.signedIn && !sync.syncing) {
+      const t = setTimeout(() => {
+        setShowSyncStatus(false);
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+  }, [sync.signedIn, sync.syncing]);
 
   const refresh = useCallback(async () => {
     try {
@@ -127,6 +138,10 @@ export default function HomeScreen() {
     ? `Synced (${sync.email ?? 'Google account'})`
     : 'Local only (not signed in)';
 
+  const greeting = sync.name
+    ? `Hi, ${sync.givenName ?? sync.name.split(' ')[0]}`
+    : null;
+
   const arrow = 'h-10 w-10 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800 active:opacity-60';
 
   return (
@@ -136,8 +151,15 @@ export default function HomeScreen() {
         className="flex-1 w-full px-5 pt-3"
         style={Platform.OS === 'web' ? { maxWidth: 640, width: '100%' } : { width: '100%' }}
       >
-        <View className="mb-4 flex-row items-center justify-between">
-          <Logo />
+        <View className="mb-3 flex-row items-center justify-between">
+          <View>
+            <Logo />
+            {greeting ? (
+              <Text className="pt-0.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                {greeting}
+              </Text>
+            ) : null}
+          </View>
           <View className="flex-row items-center gap-2">
             {day !== today ? (
               <Pressable
@@ -153,7 +175,9 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Text className="-mt-3 pb-3 text-xs text-zinc-500 dark:text-zinc-400">{syncLabel}</Text>
+        {showSyncStatus ? (
+          <Text className="pb-3 text-xs text-zinc-500 dark:text-zinc-400">{syncLabel}</Text>
+        ) : null}
 
         <DbErrorBanner error={error} />
         <SyncBanner />
@@ -293,7 +317,7 @@ export default function HomeScreen() {
         }}
       >
         <Text className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-          v2.0.3
+          v2.0.4
         </Text>
       </View>
     </SafeAreaView>
