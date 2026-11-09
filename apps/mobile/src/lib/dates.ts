@@ -14,7 +14,6 @@ export function dayOffset(offset: number): string {
 }
 
 // Turns "2026-11-01" into epoch ms, keeping the time of day from timeFromMs.
-// Returns null for anything that isn't a real calendar date.
 export function dateInputToMs(text: string, timeFromMs: number): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
   if (!m) return null;
@@ -32,8 +31,17 @@ export function monthRange(year: number, month: number): [number, number] {
   return [new Date(year, month, 1).getTime(), new Date(year, month + 1, 1).getTime()];
 }
 
-export function monthLabel(year: number, month: number): string {
-  return new Date(year, month, 1).toLocaleDateString(undefined, {
+// Accepts either (year, month) or "YYYY-MM-DD"
+export function monthLabel(arg1: number | string, arg2?: number): string {
+  if (typeof arg1 === 'string') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(arg1)) return '';
+    const { y, m } = parseDateParts(arg1);
+    return new Date(y, m, 1).toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  return new Date(arg1, arg2 ?? 0, 1).toLocaleDateString(undefined, {
     month: 'long',
     year: 'numeric',
   });
