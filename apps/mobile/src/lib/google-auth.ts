@@ -4,7 +4,13 @@ const SESSION_KEY = 'etrak_google_session';
 const STATE_KEY = 'etrak_google_state';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
-export type GoogleSession = { accessToken: string; expiresAt: number; email: string | null };
+export type GoogleSession = {
+  accessToken: string;
+  expiresAt: number;
+  email: string | null;
+  name: string | null;
+  givenName: string | null;
+};
 
 export const googleSupported = Platform.OS === 'web';
 export const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
@@ -26,7 +32,7 @@ export function subscribeToAuthChanges(callback: () => void): () => void {
   };
 
   const handleChannel = (e: MessageEvent) => {
-    if (e.data?.type === 'AUTH_STATE_CHANGED') {
+    if (e.data?.type === 'AUTH_STATE_CHANGED' || e.data?.type === 'SYNC_COMPLETED') {
       callback();
     }
   };
@@ -44,10 +50,10 @@ export function subscribeToAuthChanges(callback: () => void): () => void {
   };
 }
 
-function broadcastAuthUpdate() {
+export function broadcastAuthUpdate(type = 'AUTH_STATE_CHANGED') {
   if (authChannel) {
     try {
-      authChannel.postMessage({ type: 'AUTH_STATE_CHANGED', timestamp: Date.now() });
+      authChannel.postMessage({ type, timestamp: Date.now() });
     } catch {}
   }
 }
@@ -62,7 +68,7 @@ export function startGoogleSignIn() {
     client_id: googleClientId,
     redirect_uri: window.location.origin,
     response_type: 'token',
-    scope: `openid email ${DRIVE_SCOPE}`,
+    scope: `openid profile email ${DRIVE_SCOPE}`,
     state,
     include_granted_scopes: 'true',
     prompt: 'select_account',
@@ -75,7 +81,7 @@ export async function captureGoogleRedirect() {
 
   const rawHash = window.location.hash.replace(/^#/, '');
   const rawSearch = window.location.search.replace(/^\?/, '');
-  
+
   if (!rawHash.includes('access_token') && !rawSearch.includes('access_token')) {
     return;
   }
@@ -84,7 +90,6 @@ export async function captureGoogleRedirect() {
   const token = params.get('access_token');
   if (!token) return;
 
-  // Clean the URL hash/search immediately so reload doesn't re-trigger
   window.history.replaceState(null, '', window.location.pathname);
 
   try {
@@ -93,7 +98,9 @@ export async function captureGoogleRedirect() {
 
   const expiresAt = Date.now() + (Number(params.get('expires_in')) || 3600) * 1000;
   let email: string | null = null;
-  
+  let name: string | null = null;
+  let givenName: string | null = null;
+
   try {
     const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${token}` },
@@ -101,11 +108,13 @@ export async function captureGoogleRedirect() {
     if (res.ok) {
       const data = await res.json();
       email = data.email ?? null;
+      name = data.name ?? null;
+      givenName = data.given_name ?? null;
     }
   } catch {}
 
   try {
-    const session: GoogleSession = { accessToken: token, expiresAt, email };
+    const session: GoogleSession = { accessToken: token, expiresAt, email, name, givenName };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     broadcastAuthUpdate();
   } catch {}

@@ -3,7 +3,12 @@ import { useSyncExternalStore } from 'react';
 import { exportBackup, mergeBackup } from '@/db/backup-repo';
 import { onDataChanged, withoutChangeEvents } from '@/db/client';
 import { deleteSetting, getSetting, setSetting } from '@/db/settings-repo';
-import { clearGoogleSession, getGoogleSession, subscribeToAuthChanges } from '@/lib/google-auth';
+import {
+  broadcastAuthUpdate,
+  clearGoogleSession,
+  getGoogleSession,
+  subscribeToAuthChanges,
+} from '@/lib/google-auth';
 import {
   DriveAuthError,
   deleteBackup,
@@ -17,6 +22,8 @@ export type SyncNotice = { title: string; body: string };
 export type SyncState = {
   signedIn: boolean;
   email: string | null;
+  name: string | null;
+  givenName: string | null;
   syncing: boolean;
   paused: boolean;
   lastSync: number | null;
@@ -28,6 +35,8 @@ export type SyncState = {
 let state: SyncState = {
   signedIn: false,
   email: null,
+  name: null,
+  givenName: null,
   syncing: false,
   paused: false,
   lastSync: null,
@@ -77,13 +86,21 @@ function friendly(e: unknown): string {
 export function readSession() {
   const s = getGoogleSession();
   if (s) {
-    if (!state.signedIn || state.email !== s.email) {
-      setState({ signedIn: true, email: s.email, error: null });
+    if (!state.signedIn || state.email !== s.email || state.name !== s.name) {
+      setState({
+        signedIn: true,
+        email: s.email,
+        name: s.name,
+        givenName: s.givenName,
+        error: null,
+      });
     }
   } else if (state.signedIn) {
     setState({
       signedIn: false,
       email: null,
+      name: null,
+      givenName: null,
       error: 'Your Google sign-in expired. Sign in again to keep syncing.',
     });
   }
@@ -169,6 +186,9 @@ async function runSync(manual: boolean) {
       notice,
       dataVersion: changed > 0 ? state.dataVersion + 1 : state.dataVersion,
     });
+
+    // Notify other open tabs that new data has been merged into SQLite
+    broadcastAuthUpdate('SYNC_COMPLETED');
   } catch (e) {
     dirty = true;
     if (e instanceof DriveAuthError) {
@@ -240,7 +260,7 @@ export async function afterLocalErase(): Promise<void> {
 
 export function signOutSync() {
   clearGoogleSession();
-  setState({ signedIn: false, email: null, error: null });
+  setState({ signedIn: false, email: null, name: null, givenName: null, error: null });
 }
 
 export function dismissNotice() {
@@ -261,10 +281,9 @@ export async function initSync(): Promise<void> {
 
   const unsubscribeData = onDataChanged(handleDataChanged);
   const unsubscribeAuth = subscribeToAuthChanges(() => {
-    const s = readSession();
-    if (s && !state.paused) {
-      void syncNow(false);
-    }
+    readSession();
+    // Re-check remote data and bump version when other tabs broadcast
+    setState({ dataVersion: state.dataVersion + 1 });
   });
 
   const tickSync = () => {
