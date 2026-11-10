@@ -1,5 +1,10 @@
 # eTrak
 
+[![Download Android APK](https://img.shields.io/badge/Download-Android_APK-green?logo=android&logoColor=white)](https://drive.google.com/drive/folders/1jASpEzP-8vFqLG5OkykLKU_-kV2GDsnf?usp=sharing)
+
+> **Android Testers:** Download the standalone `.apk` directly from [Google Drive](https://drive.google.com/drive/folders/1jASpEzP-8vFqLG5OkykLKU_-kV2GDsnf?usp=sharing). Ensure *Install from Unknown Sources* is enabled on your device.
+
+
 eTrak is a private, lightweight, and offline-first personal expense tracking application built with Expo, React Native for Web, and SQLite running directly inside the browser via OPFS (Origin Private File System).
 
 ---
