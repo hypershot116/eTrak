@@ -1,11 +1,21 @@
 # eTrak
 
+[![Live Web App](https://img.shields.io/badge/Live_Demo-Cloudflare_Pages-F38020?logo=cloudflarepages&logoColor=white)](https://etrak.pages.dev)
 [![Download Android APK](https://img.shields.io/badge/Download-Android_APK-green?logo=android&logoColor=white)](https://drive.google.com/drive/folders/1jASpEzP-8vFqLG5OkykLKU_-kV2GDsnf?usp=sharing)
 
+> **Live Web Demo:** Access the browser-based PWA running directly on [Cloudflare Pages](https://etrak.pages.dev).
+>
 > **Android Testers:** Download the standalone `.apk` directly from [Google Drive](https://drive.google.com/drive/folders/1jASpEzP-8vFqLG5OkykLKU_-kV2GDsnf?usp=sharing). Ensure *Install from Unknown Sources* is enabled on your device.
 
-
 eTrak is a private, lightweight, and offline-first personal expense tracking application built with Expo, React Native for Web, and SQLite running directly inside the browser via OPFS (Origin Private File System).
+
+---
+
+## Screenshots
+
+| Dashboard & Daily Totals | Inline Expense Logging | Custom Themes & Sync |
+| :---: | :---: | :---: |
+| <img src="assets/screenshots/dashboard.png" width="260" alt="Dashboard Screen" /> | <img src="assets/screenshots/expense-entry.png" width="260" alt="Expense Logging Screen" /> | <img src="assets/screenshots/theme-settings.png" width="260" alt="Settings Screen" /> |
 
 ---
 
