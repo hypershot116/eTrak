@@ -1,82 +1,53 @@
-# eTrak - Project State & Architecture
+# Project State — eTrak (Offline-First Personal Expense Tracker)
 
-**Last Updated:** November 9, 2026  
-**Current Version:** v0.5.2 (Mobile Responsive Modal & Hydrated Multi-Tab Sync)  
-**Live Production URL:** https://etrak.pages.dev  
-**Distribution Artifact:** dist/eTrak-v0.5.0-release.apk  
-**Repository:** https://github.com/hypershot116/eTrak  
+**Status:** Completed (Learning & Architectural Exploration)  
+**Latest Version:** `v2.0.5`  
+**Platform:** Web (PWA / Cloudflare Pages) & Mobile (Expo / React Native)
 
 ---
 
-## 1. System Architecture & Guarantee
+## 1. Architectural Overview
 
-eTrak follows a strict local-first paradigm with zero custodian backend servers.
+eTrak is an offline-first, client-side personal finance tracker built with zero recurring infrastructure costs. All core application logic, database storage, and query execution reside directly on the client.
 
-* **Local Storage Layer:** Encrypted local SQLite via `@expo-sqlite` and `op-sqlite` with multi-tab VFS lock resilience and startup hydration safety.
-* **State Management:** React Native hooks, context providers, and localized synchronous persistence.
-* **Cloud Backup Layer:** Direct client-to-Google Drive synchronization via the isolated `appDataFolder` scope (`https://www.googleapis.com/auth/drive.appdata`). No central database has access to financial records.
-* **Web Hosting:** Cloudflare Pages with automated Git continuous deployment targeting the `main` branch.
-* **Multi-Tab Sync:** BroadcastChannel (`etrak_auth_sync`, `etrak_db_channel`) and persistent `localStorage` for cross-tab login & live budget synchronization.
-* **Android Packaging:** Standalone native release APK compiled locally using offline Gradle toolchains.
-
----
-
-## 2. Infrastructure & Environment Specifications
-
-* **Operating System:** Ubuntu Linux x86_64
-* **Node Runtime:** Node.js v22.22.1
-* **Package Manager:** pnpm v12.16.1
-* **Framework:** Expo SDK 58 / React Native 0.88.1 / React 19
-* **Java Development Kit:** OpenJDK 17 (headless)
-* **Android SDK Tools:** `cmdline-tools` 12.0
-* **Android Build Tools:** 34.0.0, 36.0.0, 37.0.0
-* **Android Target Platforms:** `android-34`, `android-37`
-* **Android NDK:** Version 26.1.10909125 and 27.1.12297006 side-by-side
-* **Build System:** Gradle 9.4.1 (Kotlin Gradle Plugin 2.2.10)
+* **Frontend:** Expo (SDK 52+), React Native for Web, Expo Router.
+* **Styling & Theming:** NativeWind v4 (Tailwind CSS) with dynamic CSS variables for custom palette and dark/light surface derivation.
+* **Local Database:** SQLite running in the browser via WebAssembly (WASM) backed by the browser's **Origin Private File System (OPFS)**.
+* **Cloud Sync & Backup:** User-authorized Google Drive AppData folder (`drive.appdata` scope) via OAuth 2.0 Implicit Grant / Token Flow.
+* **Hosting:** Static edge export deployed on Cloudflare Pages.
 
 ---
 
-## 3. Milestones & Progress Log
+## 2. Key Components & Implementation Details
 
-### Milestone v0.1.0 – Foundation
-- Initialized pnpm monorepo structure with Expo, TypeScript, and Tailwind CSS.
-- Configured local SQLite database schemas for transactions, categories, and account settings.
+### Client-Side Database & Deduplication
+* Schema migrations initialize SQLite tables (`categories`, `expenses`, `settings`) on first boot.
+* Automated deduplication logic runs during startup to clean up duplicate seed categories across multiple devices while reassigning historical expense foreign keys.
+* Transactions use UUID primary keys and millisecond-precision timestamps (`created_at`, `updated_at`, `deleted_at`) supporting soft deletes for consistent audit trails.
 
-### Milestone v0.2.0 – Core UI & Theming
-- Implemented futuristic Dark + Violet theme with dynamic accent support.
-- Built day-by-day swipe timeline navigation and category expense aggregation.
-- Implemented exportable PDF summary reports.
+### Google Drive Sync Engine
+* Synchronizes encrypted snapshot payloads directly into the hidden `appdata` partition of the user's personal Google Drive.
+* Implements a 2.5-second write debounce and 2-minute periodic polling when active.
+* Automatically captures OAuth tokens, extracts user profile information (`name`, `given_name`, `email`), and broadcasts authentication state changes across browser contexts.
+* Sync indicator automatically disappears after 4 seconds of idle connection to keep the UI clean.
 
-### Milestone v0.3.0 – Cloud Sync (Web)
-- Integrated Google OAuth 2.0 Web Client authentication.
-- Implemented automated SQLite backup and restore workflows directly against Google Drive's hidden `appDataFolder`.
-- Restored user data successfully from cloud sync.
-
-### Milestone v0.4.0 – Production Web Deployment
-- Configured Cloudflare Pages Git integration.
-- Added live domain (`etrak.pages.dev`) to Google Cloud Console Authorized JavaScript Origins and Authorized Redirect URIs.
-- Production web application verified and live.
-
-### Milestone v0.5.0 – Standalone Android Release Build
-- Configured native Android toolchain on Ubuntu without reliance on third-party cloud build queues.
-- Resolved native NDK header definitions and `source.properties` structure.
-- Resolved Metro bundling conflict by hoisting `babel-preset-expo` to monorepo and workspace root.
-- Generated standalone production APK: `dist/eTrak-v0.5.0-release.apk`.
-
-### Milestone v0.5.1 – Multi-Tab Concurrency & Persistent Auth
-- Replaced tab-isolated `sessionStorage` with synchronized `localStorage` and `BroadcastChannel` auth notifications.
-- Resolved web `Invalid VFS state` SQLite lock error through exponential backoff retry and non-colliding fallback.
-- Added cross-tab transaction broadcast notifications to keep UI state unified across concurrent browser windows.
-
-### Milestone v0.5.2 – Mobile Web Usability & Startup Hydration (Current)
-- Refactored `ExpenseSheet` modal with responsive height constraints (`100dvh` / `maxHeight: 88dvh`) and fixed viewport centering to prevent mobile browser clipping.
-- Integrated `subscribeToAuthChanges` into `sync-engine.ts` so all open tabs detect login and data changes immediately.
-- Coordinated startup sequence in `_layout.tsx` and suppressed transient VFS locking notifications in `index.tsx`, eliminating unauthenticated empty screen flashes.
+### Responsive UI / UX
+* **Inline Expense Card:** Replaced floating pop-up modals with an inline view swap to eliminate viewport shifting and mobile keyboard input overflow issues caused by native input sizing.
+* **Left-Aligned Financial Summary:** Clean, scannable typography displaying major daily spend totals by active currency.
+* **Theme System:** Supports Dark, Light, and System modes with user-configurable dynamic accent color palettes.
 
 ---
 
-## 4. Immediate Next Tasks
+## 3. Findings & Platform Constraints (OPFS Multi-Tab Concurrency)
 
-1. **Production Deployment:** Merge into `main` to trigger Cloudflare Pages deployment.
-2. **Device & Multi-Tab Verification:** Confirm on mobile Chrome/Safari that the Add Expense sheet stays within the screen, and verify multi-tab auto-login on desktop.
-3. **Android Physical Sideload:** Install `dist/eTrak-v0.5.0-release.apk` on physical hardware.
+* **Behavior:** When opening multiple tabs on the same origin simultaneously, secondary tabs cannot access the database.
+* **Root Cause:** Modern web browsers enforce an exclusive file-system lock on individual files stored within OPFS to prevent database corruption from concurrent WASM SQLite writes.
+* **Resolution in v2.0.5:** Instead of failing silently with blank records, secondary tabs detect the `locked` / `Invalid VFS state` error and render a clear warning prompt instructing the user to return to the active primary tab.
+* **Future Extension:** Bridging concurrent multi-tab access in this offline architecture would involve a `SharedWorker` to centralize the OPFS lock while piping queries across tabs via `MessageChannel`.
+
+---
+
+## 4. Current Repository Status
+
+* Working tree clean, fully functional build.
+* Ready for testing and portfolio demonstration.
